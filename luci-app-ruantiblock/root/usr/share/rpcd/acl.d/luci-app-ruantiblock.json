@@ -17,6 +17,7 @@
 				"/usr/bin/ruantiblock*": [ "exec" ],
 				"/sbin/logread -e ruantiblock:": [ "exec" ],
 				"/usr/sbin/logread -e ruantiblock:": [ "exec" ],
+				"/usr/libexec/logread-ubox -e ruantiblock:": [ "exec" ],
 				"/tmp": [ "list" ]
 			},
 			"uci": [ "network", "ruantiblock" ],
