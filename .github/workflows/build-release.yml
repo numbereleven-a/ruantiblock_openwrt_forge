@@ -51,10 +51,10 @@ jobs:
         run: |
           ./scripts/feeds update -a
           ./scripts/feeds install -a
-          ln -s "$GITHUB_WORKSPACE/ruantiblock" package/ruantiblock
-          ln -s "$GITHUB_WORKSPACE/luci-app-ruantiblock" package/luci-app-ruantiblock
-          ln -s "$GITHUB_WORKSPACE/ruantiblock-mod-lua" package/ruantiblock-mod-lua
-          ln -s "$GITHUB_WORKSPACE/ruantiblock-mod-py" package/ruantiblock-mod-py
+          cp -a "$GITHUB_WORKSPACE/ruantiblock" package/ruantiblock
+          cp -a "$GITHUB_WORKSPACE/luci-app-ruantiblock" package/luci-app-ruantiblock
+          cp -a "$GITHUB_WORKSPACE/ruantiblock-mod-lua" package/ruantiblock-mod-lua
+          cp -a "$GITHUB_WORKSPACE/ruantiblock-mod-py" package/ruantiblock-mod-py
 
       - name: Configure packages
         working-directory: ${{ runner.temp }}/openwrt-sdk
