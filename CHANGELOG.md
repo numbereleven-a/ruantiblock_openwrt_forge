@@ -10,7 +10,6 @@
 - Added a configurable user-list limit from 1 to 50 to **Settings → User entries**.
 - Added an **Add user list** button which automatically creates the first available `listN` section within the selected limit.
 - Added removal controls for user lists in the same LuCI table.
-- Added the installed Ruantiblock version to the Service page heading.
 
 #### Fixed
 
@@ -28,7 +27,6 @@ The fix is related to [issue #176](https://github.com/gSpotx2f/ruantiblock_openw
 - На странице **Настройки → Записи пользователя** добавлен настраиваемый лимит пользовательских списков от 1 до 50.
 - Добавлена кнопка **Добавить пользовательский список**, которая автоматически создаёт первую свободную секцию `listN` в пределах выбранного лимита.
 - В той же таблице LuCI добавлено удаление пользовательских списков.
-- В заголовок страницы «Сервис» добавлена версия установленного Ruantiblock.
 
 #### Исправлено
 
