@@ -37,6 +37,7 @@ document.head.append(E('style', {'type': 'text/css'},
 return baseclass.extend({
 	appName             : 'ruantiblock',
 	execPath            : '/usr/bin/ruantiblock',
+	versionFile         : '/usr/share/ruantiblock/version',
 	tokenFile           : '/var/run/ruantiblock.token',
 	parsersDir          : '/usr/libexec/ruantiblock',
 	torrcFile           : '/etc/tor/torrc',

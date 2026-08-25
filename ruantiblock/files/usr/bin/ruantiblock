@@ -107,7 +107,7 @@ export USER_LISTS_DIR="${CONFIG_DIR}/user_lists"
 ### Переменные экземпляров записей пользователя
 export USER_INSTANCE_VARS="U_ENABLED U_NAME U_PROXY_MODE U_TOR_TRANS_PORT U_ONION_DNS_ADDR U_IF_VPN U_VPN_GW_IP U_T_PROXY_TYPE U_T_PROXY_PORT_TCP U_T_PROXY_PORT_UDP U_T_PROXY_ALLOW_UDP U_USER_ENTRIES_DNS U_USER_ENTRIES_REMOTE U_ENABLE_ENTRIES_REMOTE_PROXY U_ENABLE_FPROXY U_FPROXY_LIST"
 ### Кол-во экземпляров записей пользователя (не более 50!)
-export USER_INSTANCES_MAX=5
+export USER_INSTANCES_MAX=10
 ### Режим списка IP адресов исключаемых из обхода блокировок (0 - выкл, 1 - вкл)
 export BYPASS_MODE=0
 ### DNS-сервер для исключаемых записей (пустая строка - без DNS-сервера). Можно с портом: 8.8.8.8#53. Если в записи указан свой DNS-сервер - он имеет приоритет
@@ -1100,6 +1100,7 @@ Start() {
         PreStartCheck
         UpdateBllistSets
         _return_code=$?
+        RestartDnsmasq
         if [ "$VPN_ROUTE_CHECK" = "1" -a -x "$ROUTE_CHECK_EXEC" ] && [ "$PROXY_MODE" = "2" -o -n "$USER_INSTANCES_VPN" ]; then
             $ROUTE_CHECK_EXEC start &> /dev/null &
         fi

@@ -531,12 +531,24 @@ msgid "Updating"
 msgstr ""
 
 msgid "URLs of remote user entries file"
-""
+msgstr ""
 
 msgid "Use optional DNS resolver"
 msgstr ""
 
 msgid "User entries"
+msgstr ""
+
+msgid "Add user list"
+msgstr ""
+
+msgid "The maximum number of user lists (%d) has been reached."
+msgstr ""
+
+msgid "Maximum number of user lists"
+msgstr ""
+
+msgid "Increase this value before adding more user lists."
 msgstr ""
 
 msgid "VPN gateway IP address"
@@ -552,7 +564,7 @@ msgid "VPN routing error! Need restart"
 msgstr ""
 
 msgid "all"
-msgstr "все"
+msgstr ""
 
 msgid "ascending"
 msgstr ""

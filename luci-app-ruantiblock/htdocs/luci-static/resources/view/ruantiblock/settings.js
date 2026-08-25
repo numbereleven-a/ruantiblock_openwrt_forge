@@ -7,6 +7,9 @@
 'require view';
 'require view.ruantiblock.tools as tools';
 
+const USER_INSTANCES_DEFAULT = 10;
+const USER_INSTANCES_HARD_MAX = 50;
+
 return view.extend({
 	parsers       : {},
 
@@ -88,6 +91,37 @@ return view.extend({
 				'wrap'      : 'off',
 				'spellcheck': 'false',
 			}, cfgvalue);
+		},
+	}),
+
+	CBIUserInstancesGrid: form.GridSection.extend({
+		__name__: 'CBI.UserInstancesGrid',
+
+		handleAdd(ev) {
+			let sections = this.cfgsections();
+			let section_id;
+			let max = Number(this.userInstancesMaxOption.formvalue('config'))
+				|| USER_INSTANCES_DEFAULT;
+
+			max = Math.min(Math.max(max, 1), USER_INSTANCES_HARD_MAX);
+			this.map.data.set(this.map.config, 'config', 'user_instances_max', String(max));
+
+			for(let i = 1; i <= max; i++) {
+				let candidate = `list${i}`;
+				if(!sections.includes(candidate)) {
+					section_id = candidate;
+					break;
+				};
+			};
+
+			if(!section_id) {
+				ui.addNotification(null,
+					E('p', _('The maximum number of user lists (%d) has been reached.')
+						.format(max)), 'warning');
+				return Promise.resolve();
+			};
+
+			return this.super('handleAdd', [ ev, section_id ]);
 		},
 	}),
 
@@ -512,10 +546,20 @@ return view.extend({
 
 		s.tab('user_entries_tab', _('User entries'));
 
-		o = s.taboption('user_entries_tab', form.SectionValue, 'user_instance', form.GridSection,
+		let user_instances_max = s.taboption('user_entries_tab', form.Value,
+			'user_instances_max', _('Maximum number of user lists'),
+			_('Increase this value before adding more user lists.'));
+		user_instances_max.default  = USER_INSTANCES_DEFAULT;
+		user_instances_max.rmempty  = false;
+		user_instances_max.datatype = `range(1,${USER_INSTANCES_HARD_MAX})`;
+
+		o = s.taboption('user_entries_tab', form.SectionValue, 'user_instance', this.CBIUserInstancesGrid,
 			'user_instance');
 		ss = o.subsection;
-		ss.addremove      = false;
+		ss.userInstancesMaxOption = user_instances_max;
+		ss.addremove      = true;
+		ss.anonymous      = true;
+		ss.addbtntitle    = _('Add user list');
 		ss.sortable       = false;
 		ss.nodescriptions = true;
 		ss.modaltitle     = `${_('User entries')} - %s`;

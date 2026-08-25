@@ -182,6 +182,7 @@ return view.extend({
 			tools.getInitStatus(tools.appName),
 			L.resolveDefault(fs.read(tools.tokenFile), 0),
 			uci.load(tools.appName),
+			L.resolveDefault(fs.read(tools.versionFile), ''),
 		]).catch(e => {
 			ui.addNotification(null, E('p', _('Unable to execute or read contents')
 				+ ': %s [ %s | %s | %s ]'.format(
@@ -343,6 +344,9 @@ return view.extend({
 		let section           = uci.get(tools.appName, 'config');
 		this.statusTokenValue = (Array.isArray(status_array)) ?
 			tools.normalizeValue(status_array[4]) : null;
+		let app_version       = tools.normalizeValue(status_array[5]);
+		let app_title         = _('Ruantiblock') +
+			((app_version) ? ` v${app_version}` : '');
 		let dialog_destroy    = new this.dialogDestroy(this);
 
 		let status_string = E('div', {
@@ -413,12 +417,13 @@ return view.extend({
 		poll.add(L.bind(this.statusPoll, this));
 
 		return E([
-			E('h2', { 'class': 'fade-in' }, _('Ruantiblock')),
+			E('h2', { 'class': 'fade-in' }, app_title),
 			E('div', { 'class': 'cbi-section-descr fade-in' },
 				E('a', {
-				'href': 'https://github.com/gSpotx2f/ruantiblock_openwrt/wiki',
-				'target': '_blank' },
-				'https://github.com/gSpotx2f/ruantiblock_openwrt/wiki')
+				'href': 'https://github.com/numbereleven-a/ruantiblock_openwrt_forge',
+				'target': '_blank',
+				'rel'   : 'noopener noreferrer' },
+				'https://github.com/numbereleven-a/ruantiblock_openwrt_forge')
 			),
 			E('div', { 'class': 'cbi-section fade-in' }, [
 				status_string,

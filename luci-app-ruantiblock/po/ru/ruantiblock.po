@@ -583,6 +583,18 @@ msgstr "Использовать альтернативный  DNS резолв�
 msgid "User entries"
 msgstr "Записи пользователя"
 
+msgid "Add user list"
+msgstr "Добавить пользовательский список"
+
+msgid "The maximum number of user lists (%d) has been reached."
+msgstr "Достигнуто максимальное количество пользовательских списков (%d)."
+
+msgid "Maximum number of user lists"
+msgstr "Максимальное количество пользовательских списков"
+
+msgid "Increase this value before adding more user lists."
+msgstr "Увеличьте это значение перед добавлением новых пользовательских списков."
+
 msgid "VPN gateway IP address"
 msgstr "IP адрес шлюза VPN"
 

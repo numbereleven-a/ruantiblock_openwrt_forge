@@ -33,6 +33,17 @@ eval $($UCI_CMD show "$UCI_SECTION" | $AWK_CMD -v UCI_VARS="$UCI_VARS" '
             };
         }')
 
+_uci_user_instances_max=$($UCI_CMD -q get "${UCI_SECTION}.user_instances_max")
+case "$_uci_user_instances_max" in
+    ''|*[!0-9]*|0)
+        case "$USER_INSTANCES_MAX" in
+            ''|*[!0-9]*|0|5) USER_INSTANCES_MAX=10 ;;
+        esac
+        ;;
+    *) USER_INSTANCES_MAX="$_uci_user_instances_max" ;;
+esac
+unset _uci_user_instances_max
+
 . /lib/functions/network.sh
 network_get_subnet subnet_lan "lan"
 if [ -n "$subnet_lan" ]; then

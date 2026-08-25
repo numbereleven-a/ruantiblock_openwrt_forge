@@ -6,8 +6,8 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=ruantiblock-mod-lua
 PKG_VERSION:=2.1.12
-PKG_RELEASE:=3
-PKG_MAINTAINER:=gSpot <https://github.com/gSpotx2f/ruantiblock_openwrt>
+PKG_RELEASE:=5
+PKG_MAINTAINER:=numbereleven-a <https://github.com/numbereleven-a/ruantiblock_openwrt_forge>
 
 include $(INCLUDE_DIR)/package.mk
 
@@ -15,7 +15,7 @@ define Package/$(PKG_NAME)
   SECTION:=net
   CATEGORY:=Network
   TITLE:=Lua module for ruantiblock
-  URL:=https://github.com/gSpotx2f/ruantiblock_openwrt
+  URL:=https://github.com/numbereleven-a/ruantiblock_openwrt_forge
   PKGARCH:=all
   DEPENDS:=+ruantiblock +lua +luasocket +luasec +luabitop +iconv +idn
   #DEPENDS:=+ruantiblock +lua +luasocket +luasec +luabitop +iconv +idn +lua-lzlib

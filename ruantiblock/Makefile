@@ -6,8 +6,8 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=ruantiblock
 PKG_VERSION:=2.1.12
-PKG_RELEASE:=3
-PKG_MAINTAINER:=gSpot <https://github.com/gSpotx2f/ruantiblock_openwrt>
+PKG_RELEASE:=5
+PKG_MAINTAINER:=numbereleven-a <https://github.com/numbereleven-a/ruantiblock_openwrt_forge>
 
 include $(INCLUDE_DIR)/package.mk
 
@@ -15,7 +15,7 @@ define Package/$(PKG_NAME)
   SECTION:=net
   CATEGORY:=Network
   TITLE:=Ruantiblock
-  URL:=https://github.com/gSpotx2f/ruantiblock_openwrt
+  URL:=https://github.com/numbereleven-a/ruantiblock_openwrt_forge
   PKGARCH:=all
   DEPENDS:=+dnsmasq-full +kmod-nft-tproxy
 endef
@@ -36,6 +36,11 @@ define Package/$(PKG_NAME)/conffiles
 /etc/ruantiblock/user_lists/list3
 /etc/ruantiblock/user_lists/list4
 /etc/ruantiblock/user_lists/list5
+/etc/ruantiblock/user_lists/list6
+/etc/ruantiblock/user_lists/list7
+/etc/ruantiblock/user_lists/list8
+/etc/ruantiblock/user_lists/list9
+/etc/ruantiblock/user_lists/list10
 endef
 
 define Build/Configure
@@ -64,10 +69,16 @@ define Package/$(PKG_NAME)/install
 	$(INSTALL_DATA) ./files/etc/ruantiblock/user_lists/list3 $(1)/etc/ruantiblock/user_lists/list3
 	$(INSTALL_DATA) ./files/etc/ruantiblock/user_lists/list4 $(1)/etc/ruantiblock/user_lists/list4
 	$(INSTALL_DATA) ./files/etc/ruantiblock/user_lists/list5 $(1)/etc/ruantiblock/user_lists/list5
+	$(INSTALL_DATA) ./files/etc/ruantiblock/user_lists/list6 $(1)/etc/ruantiblock/user_lists/list6
+	$(INSTALL_DATA) ./files/etc/ruantiblock/user_lists/list7 $(1)/etc/ruantiblock/user_lists/list7
+	$(INSTALL_DATA) ./files/etc/ruantiblock/user_lists/list8 $(1)/etc/ruantiblock/user_lists/list8
+	$(INSTALL_DATA) ./files/etc/ruantiblock/user_lists/list9 $(1)/etc/ruantiblock/user_lists/list9
+	$(INSTALL_DATA) ./files/etc/ruantiblock/user_lists/list10 $(1)/etc/ruantiblock/user_lists/list10
 	$(INSTALL_DIR) $(1)/usr/share/ruantiblock
 	$(INSTALL_DATA) ./files/usr/share/ruantiblock/blacklist_sources $(1)/usr/share/ruantiblock/blacklist_sources
 	$(INSTALL_DATA) ./files/usr/share/ruantiblock/config_script $(1)/usr/share/ruantiblock/config_script
 	$(INSTALL_DATA) ./files/usr/share/ruantiblock/config_script_user_instances $(1)/usr/share/ruantiblock/config_script_user_instances
+	printf '%s\n' '$(PKG_VERSION)-r$(PKG_RELEASE)' > $(1)/usr/share/ruantiblock/version
 	$(INSTALL_DATA) ./files/usr/share/ruantiblock/info_output $(1)/usr/share/ruantiblock/info_output
 	$(INSTALL_DATA) ./files/usr/share/ruantiblock/nft_functions $(1)/usr/share/ruantiblock/nft_functions
 	$(INSTALL_DATA) ./files/usr/share/ruantiblock/user_instances_common $(1)/usr/share/ruantiblock/user_instances_common
