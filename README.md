@@ -1,6 +1,6 @@
-## Ruantiblock
+# Ruantiblock
 
-[English](#english) | [Русский](#русский)
+[English](#english) | [Русский](README.ru.md)
 
 ## English
 
@@ -24,72 +24,36 @@ The default number of user lists has been increased from 5 to 10. In LuCI, **Set
 
 * Integrates with the OpenWrt web interface.
 
-### Installation
+### Downloads and installation
 
-Each release provides two architecture-independent archives:
+Choose one architecture-independent archive from the latest release:
 
-* OpenWrt 23.05–24.10 — IPK packages for installation with `opkg`.
+* `ruantiblock-2.1.12-r5-openwrt-23.05-24.10-ipk.zip` — OpenWrt 23.05–24.10 (`opkg`).
 
-* OpenWrt 25.12 and newer — APK packages for installation with `apk`.
+* `ruantiblock-2.1.12-r5-openwrt-25.12-apk.zip` — OpenWrt 25.12 and newer (`apk`).
 
-Required packages:
+Prepare the required OpenWrt dependencies as described in the [original project Wiki](https://github.com/gSpotx2f/ruantiblock_openwrt/wiki), extract the matching archive, copy the packages to the router, and install the required pair.
 
-* `ruantiblock` — core package.
+OpenWrt 23.05–24.10:
 
-* `luci-app-ruantiblock` — LuCI web interface.
+```sh
+opkg update
+opkg install ./ruantiblock_2.1.12-r5_all.ipk ./luci-app-ruantiblock_2.1.12-r5_all.ipk
+```
 
-Optional packages:
+OpenWrt 25.12 and newer:
 
-* `luci-i18n-ruantiblock-ru` — Russian translation for LuCI.
+```sh
+apk update
+apk add --allow-untrusted ./ruantiblock-2.1.12-r5.apk ./luci-app-ruantiblock-2.1.12-r5.apk
+```
+
+Optional packages in each archive:
+
+* `luci-i18n-ruantiblock-ru` — Russian LuCI translation.
 
 * `ruantiblock-mod-lua` — Lua list-processing module.
 
 * `ruantiblock-mod-py` — Python list-processing module.
 
-Installation and upgrade commands are included in each release description. Detailed configuration documentation is available in the [original project Wiki](https://github.com/gSpotx2f/ruantiblock_openwrt/wiki).
-
-## Русский
-
-Выборочная маршрутизация для обхода блокировок в OpenWrt.
-
-### Отличия этого форка
-
-Этот [форк](https://github.com/numbereleven-a/ruantiblock_openwrt_forge) основан на [оригинальном проекте gSpotx2f](https://github.com/gSpotx2f/ruantiblock_openwrt) и сохраняет совместимость с его конфигурацией.
-
-В версии `2.1.12-r5` исправлена синхронизация dnsmasq и nftables при запуске Ruantiblock. После применения nft-наборов dnsmasq перезапускается внутри основной процедуры `Start()`. Это предотвращает потерю маршрутизации доменов из активных пользовательских списков после изменения или сохранения выключенного списка.
-
-Количество пользовательских списков по умолчанию увеличено с 5 до 10. В LuCI на странице **Настройки → Записи пользователя** появились настраиваемый лимит списков (от 1 до 50) и кнопка **Добавить пользовательский список**: она автоматически создаёт первую свободную секцию `listN` в пределах выбранного лимита. Существующие списки можно удалить в той же таблице. При обновлении прежнее значение по умолчанию 5 заменяется на 10, а другие корректные пользовательские значения сохраняются.
-
-* Решение построено на стандартных системных службах и утилитах OpenWrt (nftables, dnsmasq).
-
-* Поддерживаются L3 VPN с маршрутизацией на сетевой интерфейс (OpenVPN, WireGuard, PPTP, sing-box в режиме TUN и пр.), прозрачные прокси с перенаправлением на порт (sing-box в режиме TProxy, Xray, V2Ray, Shadowsocks-libev, Redsocks и пр.), Tor.
-
-* Перенаправление трафика на основе доменов и IP-адресов.
-
-* Гибкие настройки для пользовательских списков, использование нескольких VPN/прокси для разных списков с приоритетами.
-
-* Интеграция с веб-интерфейсом OpenWrt.
-
-### Установка
-
-Для каждой версии в разделе Releases публикуются два универсальных архива:
-
-* OpenWrt 23.05–24.10 — пакеты IPK для установки через `opkg`.
-
-* OpenWrt 25.12 и новее — пакеты APK для установки через `apk`.
-
-Обязательный комплект:
-
-* `ruantiblock` — основной пакет.
-
-* `luci-app-ruantiblock` — веб-интерфейс LuCI.
-
-Дополнительные пакеты:
-
-* `luci-i18n-ruantiblock-ru` — русская локализация LuCI.
-
-* `ruantiblock-mod-lua` — модуль обработки списков на Lua.
-
-* `ruantiblock-mod-py` — модуль обработки списков на Python.
-
-Команды установки и обновления приводятся в описании каждого релиза. Подробная документация по настройке Ruantiblock доступна в [Wiki оригинального проекта](https://github.com/gSpotx2f/ruantiblock_openwrt/wiki).
+Each ZIP includes `SHA256SUMS` for its package files.
