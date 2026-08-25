@@ -1,0 +1,105 @@
+name: Build release packages
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: OpenWrt ${{ matrix.openwrt }} (${{ matrix.format }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - openwrt: 24.10.8
+            format: ipk
+            sdk_file: openwrt-sdk-24.10.8-x86-64_gcc-13.3.0_musl.Linux-x86_64.tar.zst
+            sdk_sha256: ac4a0405d2eea821b06f93c14ba13ffa90ad0457648903df7dde02570027ab21
+            archive: ruantiblock-2.1.12-r5-openwrt-23.05-24.10-ipk.zip
+          - openwrt: 25.12.5
+            format: apk
+            sdk_file: openwrt-sdk-25.12.5-x86-64_gcc-14.3.0_musl.Linux-x86_64.tar.zst
+            sdk_sha256: 0c8df0151a1e88feb7c03d694d61f6a18d51872815b7c811d76e2b77504d5e9c
+            archive: ruantiblock-2.1.12-r5-openwrt-25.12-apk.zip
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install host tools
+        run: sudo apt-get update && sudo apt-get install --yes zstd
+
+      - name: Download and verify OpenWrt SDK
+        env:
+          SDK_FILE: ${{ matrix.sdk_file }}
+          SDK_SHA256: ${{ matrix.sdk_sha256 }}
+          OPENWRT_VERSION: ${{ matrix.openwrt }}
+        run: |
+          curl --fail --location --retry 3 \
+            --output "$RUNNER_TEMP/$SDK_FILE" \
+            "https://downloads.openwrt.org/releases/$OPENWRT_VERSION/targets/x86/64/$SDK_FILE"
+          printf '%s  %s\n' "$SDK_SHA256" "$RUNNER_TEMP/$SDK_FILE" | sha256sum --check --strict
+          mkdir "$RUNNER_TEMP/openwrt-sdk"
+          tar --extract --zstd --file "$RUNNER_TEMP/$SDK_FILE" \
+            --directory "$RUNNER_TEMP/openwrt-sdk" --strip-components=1
+
+      - name: Prepare feeds and package sources
+        working-directory: ${{ runner.temp }}/openwrt-sdk
+        run: |
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+          ln -s "$GITHUB_WORKSPACE/ruantiblock" package/ruantiblock
+          ln -s "$GITHUB_WORKSPACE/luci-app-ruantiblock" package/luci-app-ruantiblock
+          ln -s "$GITHUB_WORKSPACE/ruantiblock-mod-lua" package/ruantiblock-mod-lua
+          ln -s "$GITHUB_WORKSPACE/ruantiblock-mod-py" package/ruantiblock-mod-py
+
+      - name: Configure packages
+        working-directory: ${{ runner.temp }}/openwrt-sdk
+        run: |
+          cat >> .config <<'EOF'
+          CONFIG_PACKAGE_ruantiblock=m
+          CONFIG_PACKAGE_luci-app-ruantiblock=m
+          CONFIG_PACKAGE_luci-i18n-ruantiblock-ru=m
+          CONFIG_PACKAGE_ruantiblock-mod-lua=m
+          CONFIG_PACKAGE_ruantiblock-mod-py=m
+          CONFIG_LUCI_LANG_ru=y
+          EOF
+          make defconfig
+
+      - name: Build packages
+        working-directory: ${{ runner.temp }}/openwrt-sdk
+        run: |
+          make -j"$(nproc)" package/ruantiblock/compile V=s
+          make -j"$(nproc)" package/luci-app-ruantiblock/compile V=s
+          make -j"$(nproc)" package/ruantiblock-mod-lua/compile V=s
+          make -j"$(nproc)" package/ruantiblock-mod-py/compile V=s
+
+      - name: Assemble release archive
+        env:
+          PACKAGE_FORMAT: ${{ matrix.format }}
+          ARCHIVE_NAME: ${{ matrix.archive }}
+        working-directory: ${{ runner.temp }}/openwrt-sdk
+        run: |
+          output="$RUNNER_TEMP/release"
+          mkdir "$output"
+          mapfile -t packages < <(find bin/packages -type f \
+            \( -name "ruantiblock*.${PACKAGE_FORMAT}" \
+               -o -name "luci-app-ruantiblock*.${PACKAGE_FORMAT}" \
+               -o -name "luci-i18n-ruantiblock-ru*.${PACKAGE_FORMAT}" \) \
+            | sort)
+          printf '%s\n' "${packages[@]}"
+          test "${#packages[@]}" -eq 5
+          cp "${packages[@]}" "$output/"
+          (cd "$output" && sha256sum * > SHA256SUMS)
+          (cd "$output" && zip -9 "$GITHUB_WORKSPACE/$ARCHIVE_NAME" ./*)
+
+      - name: Upload release archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.format }}
+          path: ${{ matrix.archive }}
+          if-no-files-found: error
+          retention-days: 7
