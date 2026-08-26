@@ -32,6 +32,8 @@ Choose the package format supported by the target OpenWrt release from the [late
 
 * OpenWrt 25.12 and newer — APK packages for installation with `apk`.
 
+The main release archives contain the required `ruantiblock` and `luci-app-ruantiblock` package pair for the corresponding format. The optional Lua and Python modules are published as separate release assets.
+
 Required packages:
 
 * `ruantiblock` — core package.
@@ -46,4 +48,4 @@ Optional packages:
 
 Prepare the required OpenWrt dependencies as described in the [original project Wiki](https://github.com/gSpotx2f/ruantiblock_openwrt/wiki), copy the matching packages to the router, and install the required pair.
 
-Each release archive includes `SHA256SUMS` for package verification. Installation and upgrade commands are included in the release description.
+`SHA256SUMS` is published as a separate release asset for package verification. Installation and upgrade commands are included in the release description.
