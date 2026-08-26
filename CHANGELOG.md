@@ -16,7 +16,6 @@ Package versions:
 - Added a manual check for newer releases through the public GitHub Releases API.
 - Added separate core and LuCI version display in the web interface.
 - Added detailed VPN routing diagnostics with the affected instance, interface, route table, and failure reason when available.
-- Added configurable limits and controls for creating and removing user lists in LuCI.
 
 #### Fixed
 
@@ -24,7 +23,6 @@ Package versions:
 - Fixed cleanup of nftables state during service shutdown and restart.
 - Made blacklist download failures stop the affected update cleanly without leaving partial data active.
 - Handled missing crontab entries without aborting package removal or service maintenance.
-- Synchronized dnsmasq with the active nftables state during service startup.
 
 ### Русский
 
@@ -33,7 +31,6 @@ Package versions:
 - Добавлена ручная проверка новых релизов через публичный GitHub Releases API.
 - В веб-интерфейсе добавлено раздельное отображение версий core и LuCI.
 - Добавлена подробная диагностика VPN-маршрутизации с экземпляром, интерфейсом, таблицей маршрутизации и причиной ошибки, если эти данные доступны.
-- В LuCI добавлены настраиваемые ограничения и управление созданием и удалением пользовательских списков.
 
 #### Исправлено
 
@@ -41,7 +38,6 @@ Package versions:
 - Исправлена очистка состояния nftables при остановке и перезапуске службы.
 - Ошибка загрузки чёрного списка теперь корректно прерывает его обновление без активации неполных данных.
 - Обработано отсутствие записей crontab, чтобы оно не прерывало удаление пакета и обслуживание службы.
-- При запуске службы состояние dnsmasq синхронизируется с активным состоянием nftables.
 
 ## 2.1.12-r5
 
