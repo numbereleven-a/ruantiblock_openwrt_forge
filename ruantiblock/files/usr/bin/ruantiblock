@@ -105,7 +105,7 @@ export USER_INSTANCES_DIR="${CONFIG_DIR}/user_instances"
 ### Директория списков записей пользователя
 export USER_LISTS_DIR="${CONFIG_DIR}/user_lists"
 ### Переменные экземпляров записей пользователя
-export USER_INSTANCE_VARS="U_ENABLED U_NAME U_PROXY_MODE U_TOR_TRANS_PORT U_ONION_DNS_ADDR U_IF_VPN U_VPN_GW_IP U_T_PROXY_TYPE U_T_PROXY_PORT_TCP U_T_PROXY_PORT_UDP U_T_PROXY_ALLOW_UDP U_USER_ENTRIES_DNS U_USER_ENTRIES_REMOTE U_ENABLE_ENTRIES_REMOTE_PROXY U_ENABLE_FPROXY U_FPROXY_LIST"
+export USER_INSTANCE_VARS="U_ENABLED U_NAME U_PROXY_MODE U_TOR_TRANS_PORT U_ONION_DNS_ADDR U_IF_VPN U_VPN_GW_IP U_T_PROXY_TYPE U_T_PROXY_PORT_TCP U_T_PROXY_PORT_UDP U_T_PROXY_ALLOW_UDP U_ENTRIES_DNS U_ENTRIES_REMOTE U_ENABLE_ENTRIES_REMOTE_PROXY U_ENABLE_FPROXY U_FPROXY_LIST"
 ### Кол-во экземпляров записей пользователя (не более 50!)
 export USER_INSTANCES_MAX=10
 ### Режим списка IP адресов исключаемых из обхода блокировок (0 - выкл, 1 - вкл)
@@ -331,7 +331,7 @@ fi
 
 Help() {
 cat << EOF
- Usage: ${APP_NAME} start|force-start|stop|destroy|restart|reload|update|force-update|blacklist-files|status|raw-status|html-info|help
+ Usage: ${APP_NAME} start|force-start|stop|destroy|restart|reload|update|force-update|blacklist-files|status|raw-status|vpn-route-status|vpn-route-diagnostic|html-info|help
         start : Start
         force-start : Removing the PID-file before running
         stop : Stop
@@ -343,6 +343,8 @@ cat << EOF
         blacklist-files : Create ${IP_DATA_FILE}, ${IP_DATA_FILE_USER_INSTANCES}, ${DNSMASQ_DATA_FILE}, ${DNSMASQ_DATA_FILE_USER_INSTANCES}, ${IP_DATA_FILE_BYPASS}, ${DNSMASQ_DATA_FILE_BYPASS} (without network functions)
         status : Status & some info
         raw-status : Return code: 0 - enabled, 1 - error, 2 - disabled, 3 - starting, 4 - updating
+        vpn-route-status : Return code of the VPN route check
+        vpn-route-diagnostic : Show details for failed VPN routes
         html-info : Return the html-info output
         -h|--help|help : This message
  Examples:
@@ -383,16 +385,13 @@ Download() {
 
 DownloadNativeBlacklist() {
     local _ip_data_file _dnsmasq_data_file _update_status_file _return_code=0
-    if [ "$ENABLE_TMP_DOWNLOADS" = "1" ]; then
-        _ip_data_file="$IP_DATA_FILE_TMP"
-        _dnsmasq_data_file="$DNSMASQ_DATA_FILE_TMP"
-        _update_status_file="$UPDATE_STATUS_FILE_TMP"
-        rm -f "$_ip_data_file" "$_dnsmasq_data_file" "$_update_status_file"
-    else
-        _ip_data_file="$IP_DATA_FILE"
-        _dnsmasq_data_file="$DNSMASQ_DATA_FILE"
-        _update_status_file="$UPDATE_STATUS_FILE"
-    fi
+    # Native downloads are transactional even when ENABLE_TMP_DOWNLOADS=0.
+    # wget -O truncates its destination before connecting, so a failed
+    # download must never destroy the last known-good data.
+    _ip_data_file="$IP_DATA_FILE_TMP"
+    _dnsmasq_data_file="$DNSMASQ_DATA_FILE_TMP"
+    _update_status_file="$UPDATE_STATUS_FILE_TMP"
+    rm -f "$_ip_data_file" "$_dnsmasq_data_file" "$_update_status_file"
     if [ -n "$DL_IPSET_URL" -a -n "$DL_DMASK_URL" -a -n "$DL_STAT_URL" ]; then
         Download "$_ip_data_file" "$DL_IPSET_URL"
         if [ $? -ne 0 ]; then
@@ -413,14 +412,12 @@ DownloadNativeBlacklist() {
         MakeLogRecord "err" "Native blacklist configuration error (${1})"
         exit 1
     fi
-    if [ "$ENABLE_TMP_DOWNLOADS" = "1" ]; then
-        if [ $_return_code -eq 0 ]; then
-            mv -f "$_ip_data_file" "$IP_DATA_FILE"
-            mv -f "$_dnsmasq_data_file" "$DNSMASQ_DATA_FILE"
-            mv -f "$_update_status_file" "$UPDATE_STATUS_FILE"
-        else
-            rm -f "$_ip_data_file" "$_dnsmasq_data_file" "$_update_status_file"
-        fi
+    if [ $_return_code -eq 0 ]; then
+        mv -f "$_ip_data_file" "$IP_DATA_FILE"
+        mv -f "$_dnsmasq_data_file" "$DNSMASQ_DATA_FILE"
+        mv -f "$_update_status_file" "$UPDATE_STATUS_FILE"
+    else
+        rm -f "$_ip_data_file" "$_dnsmasq_data_file" "$_update_status_file"
     fi
     return $_return_code
 }
@@ -457,8 +454,30 @@ FlushInstancesNftSets() {
     done
 }
 
+DeleteInstancesNftSets() {
+    local _name _set
+    for _name in $USER_INSTANCES_CFG " "
+    do
+        if [ "$_name" = " " ]; then
+            _name=""
+        else
+            _name=".${_name}"
+        fi
+        for _set in \
+            "${NFTSET_FPROXY}${_name}" \
+            "${NFTSET_BLLIST_PROXY}${_name}" \
+            "${NFTSET_CIDR}${_name}" \
+            "${NFTSET_IP}${_name}" \
+            "${NFTSET_DNSMASQ}${_name}" \
+            "${NFTSET_ONION}${_name}"
+        do
+            $NFT_CMD delete set $NFT_TABLE "$_set" &> /dev/null
+        done
+    done
+}
+
 FormatNftSetElemsList() {
-    printf "$1" | $AWK_CMD '{gsub(/[ ]+/, ",", $0); printf $0;}'
+    printf '%s' "$1" | $AWK_CMD '{gsub(/[ ]+/, ",", $0); printf "%s", $0;}'
 }
 
 UpdateLocalIpSets() {
@@ -544,14 +563,14 @@ UpdateBllistProxySet() {
         }
         END {
             for(i in hosts_arr) {
-                printf i " ";
+                printf "%s ", i;
             };
         }')
     do
-        if printf "$_host" | $AWK_CMD '{exit ($0 ~ /^([0-9]{1,3}.){3}[0-9]{1,3}$/) ? 0 : 1}'; then
+        if printf '%s' "$_host" | $AWK_CMD '{exit ($0 ~ /^([0-9]{1,3}.){3}[0-9]{1,3}$/) ? 0 : 1}'; then
             _ip_string="${_ip_string}${_host} "
         else
-            _ip_string="${_ip_string}$($NSLOOKUP_CMD $_host 2> /dev/null | $AWK_CMD '/^Address: ([0-9]{1,3}.){3}[0-9]{1,3}$/ {printf $2" "}')"
+            _ip_string="${_ip_string}$($NSLOOKUP_CMD $_host 2> /dev/null | $AWK_CMD '/^Address: ([0-9]{1,3}.){3}[0-9]{1,3}$/ {printf "%s ", $2}')"
         fi
     done
     _ip_string=$(FormatNftSetElemsList "$_ip_string")
@@ -671,6 +690,7 @@ SetNetConfig() {
 DropNetConfig() {
     DeleteNftRules
     FlushInstancesNftSets
+    DeleteInstancesNftSets
     FlushNftSets "$NFTSET_LOCAL_IP" "$NFTSET_ALLOWED_HOSTS" "$NFTSET_FPROXY_LOCAL" "$NFTSET_BLLIST_PROXY" "$NFTSET_BYPASS_IP" "$NFTSET_BYPASS_FQDN"
 }
 
@@ -698,6 +718,63 @@ GetVpnRouteStatus() {
         _ret_val=1
     fi
     return $_ret_val
+}
+
+VpnRouteDiagnosticCheck() {
+    local _name="$1" _if_vpn="$2" _route_table_id="$3" _link_line _link_flags _vpn_ip _route
+
+    if [ -z "$_if_vpn" ]; then
+        printf "%s: VPN interface is not configured (route table %s)\n" "$_name" "$_route_table_id"
+        return 1
+    fi
+
+    _link_line=$($IP_CMD -o link show dev "$_if_vpn" 2> /dev/null)
+    if [ -z "$_link_line" ]; then
+        printf "%s: VPN interface %s not found (route table %s)\n" "$_name" "$_if_vpn" "$_route_table_id"
+        return 1
+    fi
+
+    _link_flags=$(printf "%s\n" "$_link_line" | $AWK_CMD -F '<|>' 'NF >= 2 {print $2}')
+    if ! printf "%s\n" "$_link_flags" | $AWK_CMD '{exit ($0 ~ /(^|,)UP(,|$)/) ? 0 : 1}'; then
+        printf "%s: VPN interface %s is down (route table %s)\n" "$_name" "$_if_vpn" "$_route_table_id"
+        return 1
+    fi
+
+    _vpn_ip=$($IP_CMD -4 -o addr show dev "$_if_vpn" 2> /dev/null | $AWK_CMD 'NR == 1 {print $4}')
+    if [ -z "$_vpn_ip" ]; then
+        printf "%s: VPN interface %s has no IPv4 address (route table %s)\n" "$_name" "$_if_vpn" "$_route_table_id"
+        return 1
+    fi
+
+    _route=$($IP_CMD -4 route show table "$_route_table_id" 2> /dev/null | $AWK_CMD '/^(default|local) / {print; exit}')
+    if [ -z "$_route" ]; then
+        printf "%s: route table %s has no usable default route (interface %s)\n" "$_name" "$_route_table_id" "$_if_vpn"
+        return 1
+    fi
+
+    return 0
+}
+
+VpnRouteDiagnostic() {
+    local _inst _i=1 _return_code=0 _if_vpn
+
+    for _inst in $USER_INSTANCES_VPN_FNAMES
+    do
+        IncludeUserInstanceVars "$_inst"
+        _if_vpn="${U_IF_VPN:-$INSTANCES_DEF_IF_VPN}"
+        VpnRouteDiagnosticCheck "$_inst" "$_if_vpn" $(($VPN_ROUTE_TABLE_ID_START + $_i)) || _return_code=1
+        ClearUserInstanceVars
+        _i=$(($_i + 1))
+    done
+
+    if [ "$PROXY_MODE" = "2" ]; then
+        VpnRouteDiagnosticCheck "main instance" "${IF_VPN:-$INSTANCES_DEF_IF_VPN}" "$VPN_ROUTE_TABLE_ID_START" || _return_code=1
+    fi
+
+    if [ $_return_code -eq 0 ]; then
+        echo "OK"
+    fi
+    return 0
 }
 
 ClearDataFiles() {
@@ -890,7 +967,7 @@ AddUserEntries() {
     if [ "$ENABLE_TMP_DOWNLOADS" != "1" ] || [ "$ENABLE_TMP_DOWNLOADS" = "1" -a $_return_code -eq 0 ]; then
         while read _str
         do
-            _update_string=$(printf "$_str" | $AWK_CMD '{
+            _update_string=$(printf '%s' "$_str" | $AWK_CMD '{
                 if(NF == 4) {
                     printf "User entries (%s): CIDR: %s, IP: %s, FQDN: %s", $4, $1, $2, $3;
                 };
@@ -1018,19 +1095,10 @@ DeleteInstancesCache() {
 }
 
 Init() {
-    local _arg="$1"
     . "$BLLIST_SOURCES_SCRIPT"
-    if [ -e "$INSTANCES_CACHE" ]; then
-        . "$INSTANCES_CACHE"
-
-        if [ $DEBUG -ge 2 ]; then
-            echo "  ruantiblock.Init(): read from INSTANCES_CACHE" >&2
-            MakeLogRecord "debug" "ruantiblock.Init(): read from INSTANCES_CACHE"
-        fi
-
-    else
-        SetUserInstancesItems
-    fi
+    # The UCI-backed instance files can change without removing the cache.
+    # Rebuild the derived lists on every invocation instead of using stale data.
+    SetUserInstancesItems
 }
 
 MakeToken() {
@@ -1098,6 +1166,9 @@ Start() {
         DropNetConfig &> /dev/null
         SetNetConfig
         PreStartCheck
+        # Rebuild local user-entry files so disabled/removed instances cannot
+        # leave stale dnsmasq directives or nft data behind after a restart.
+        AddUserEntries
         UpdateBllistSets
         _return_code=$?
         RestartDnsmasq
@@ -1346,6 +1417,15 @@ case "$1" in
         GetVpnRouteStatus
         return_code=$?
         echo $return_code
+    ;;
+    vpn-route-diagnostic)
+        Init
+        if CheckStatus; then
+            VpnRouteDiagnostic
+        else
+            echo "Service is disabled"
+        fi
+        return_code=0
     ;;
     html-info)
         Init

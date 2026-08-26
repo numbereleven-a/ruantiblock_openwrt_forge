@@ -183,6 +183,7 @@ return view.extend({
 			L.resolveDefault(fs.read(tools.tokenFile), 0),
 			uci.load(tools.appName),
 			L.resolveDefault(fs.read(tools.versionFile), ''),
+			L.resolveDefault(fs.exec_direct(tools.execPath, [ 'vpn-route-diagnostic' ], 'text'), ''),
 		]).catch(e => {
 			ui.addNotification(null, E('p', _('Unable to execute or read contents')
 				+ ': %s [ %s | %s | %s ]'.format(
@@ -209,6 +210,7 @@ return view.extend({
 		let dnsmasq_confdir       = section.dnsmasq_confdir;
 		let bllist_preset         = section.bllist_preset;
 		let bllist_module         = section.bllist_module;
+		let vpn_route_diagnostic  = status_array[6] || '';
 
 		let btn_enable = elems[2] || document.getElementById('btn_enable');
 		if(enabled_flag == true) {
@@ -270,7 +272,8 @@ return view.extend({
 			app_status_code,
 			bllist_preset,
 			bllist_module,
-			vpn_route_status_code)
+			vpn_route_status_code,
+			vpn_route_diagnostic)
 		);
 
 		if(!poll.active()) {

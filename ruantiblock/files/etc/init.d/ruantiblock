@@ -31,7 +31,7 @@ get_dnsmasq_confdir() {
 					print (CUR_DIR in a) ? CUR_DIR : a[0];
 				}')
 			if [ -n "$_first_instance_dir" ]; then
-				printf "$_first_instance_dir"
+				printf '%s' "$_first_instance_dir"
 				return 0
 			fi
 			_i=$(($_i + 1))

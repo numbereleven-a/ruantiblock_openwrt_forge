@@ -10,50 +10,40 @@ Selective routing for bypassing network restrictions on OpenWrt.
 
 This [fork](https://github.com/numbereleven-a/ruantiblock_openwrt_forge) is based on the [original gSpotx2f project](https://github.com/gSpotx2f/ruantiblock_openwrt) and remains compatible with its configuration.
 
-Version `2.1.12-r5` corrects dnsmasq and nftables synchronization during Ruantiblock startup. After the nft sets are applied, dnsmasq is restarted from the main `Start()` procedure. This prevents domain routing from active user lists from being lost after a disabled list is edited or saved.
+This fork adds and improves:
 
-The default number of user lists has been increased from 5 to 10. In LuCI, **Settings → User entries** now has a configurable list limit (from 1 to 50) and an **Add user list** button which automatically creates the first available `listN` section within that limit. Existing lists can also be removed from the same table. On upgrade, the old default limit of 5 is migrated to 10, while other valid custom limits are preserved.
+* LuCI controls for configuring the user-list limit and adding or removing user lists.
 
-* Uses standard OpenWrt services and utilities, including nftables and dnsmasq.
+* VPN routing diagnostics showing the affected VPN instance, interface, route table, and failure reason when available.
 
-* Supports L3 VPNs with interface-based routing (OpenVPN, WireGuard, PPTP, sing-box in TUN mode, and others), transparent proxies with port redirection (sing-box in TProxy mode, Xray, V2Ray, Shadowsocks-libev, Redsocks, and others), and Tor.
+* Separate core and LuCI version display together with a manual check against the public GitHub Releases API. No token, automatic download, or automatic installation is used.
 
-* Routes traffic based on domain names and IP addresses.
+* Core handling for stale instance data, user DNS configuration rebuilding, nftables cleanup, failed blacklist downloads, missing crontab entries, and dnsmasq synchronization during startup.
 
-* Supports custom lists, multiple VPN or proxy connections, and list priorities.
+The routing model remains compatible with the original project and uses standard OpenWrt services and utilities, including nftables and dnsmasq.
 
-* Integrates with the OpenWrt web interface.
+The package supports L3 VPNs with interface-based routing (OpenVPN, WireGuard, PPTP, sing-box in TUN mode, and others), transparent proxies with port redirection (sing-box in TProxy mode, Xray, V2Ray, Shadowsocks-libev, Redsocks, and others), and Tor. Traffic can be routed by domain names and IP addresses, with multiple VPN or proxy connections and list priorities.
 
 ### Downloads and installation
 
-Choose one architecture-independent archive from the latest release:
+Choose the package format supported by the target OpenWrt release from the [latest release](https://github.com/numbereleven-a/ruantiblock_openwrt_forge/releases/latest):
 
-* `ruantiblock-2.1.12-r5-openwrt-23.05-24.10-ipk.zip` — OpenWrt 23.05–24.10 (`opkg`).
+* OpenWrt 23.05–24.10 — IPK packages for installation with `opkg`.
 
-* `ruantiblock-2.1.12-r5-openwrt-25.12-apk.zip` — OpenWrt 25.12 and newer (`apk`).
+* OpenWrt 25.12 and newer — APK packages for installation with `apk`.
 
-Prepare the required OpenWrt dependencies as described in the [original project Wiki](https://github.com/gSpotx2f/ruantiblock_openwrt/wiki), extract the matching archive, copy the packages to the router, and install the required pair.
+Required packages:
 
-OpenWrt 23.05–24.10:
+* `ruantiblock` — core package.
 
-```sh
-opkg update
-opkg install ./ruantiblock_2.1.12-r5_all.ipk ./luci-app-ruantiblock_2.1.12-r5_all.ipk
-```
+* `luci-app-ruantiblock` — LuCI web interface.
 
-OpenWrt 25.12 and newer:
-
-```sh
-apk update
-apk add --allow-untrusted ./ruantiblock-2.1.12-r5.apk ./luci-app-ruantiblock-2.1.12-r5.apk
-```
-
-Optional packages in each archive:
-
-* `luci-i18n-ruantiblock-ru` — Russian LuCI translation.
+Optional packages:
 
 * `ruantiblock-mod-lua` — Lua list-processing module.
 
 * `ruantiblock-mod-py` — Python list-processing module.
 
-Each ZIP includes `SHA256SUMS` for its package files.
+Prepare the required OpenWrt dependencies as described in the [original project Wiki](https://github.com/gSpotx2f/ruantiblock_openwrt/wiki), copy the matching packages to the router, and install the required pair.
+
+Each release archive includes `SHA256SUMS` for package verification. Installation and upgrade commands are included in the release description.

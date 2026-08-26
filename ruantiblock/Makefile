@@ -5,8 +5,8 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=ruantiblock
-PKG_VERSION:=2.1.12
-PKG_RELEASE:=5
+PKG_VERSION:=2.1.15
+PKG_RELEASE:=2
 PKG_MAINTAINER:=numbereleven-a <https://github.com/numbereleven-a/ruantiblock_openwrt_forge>
 
 include $(INCLUDE_DIR)/package.mk
@@ -108,18 +108,20 @@ CRONTAB_FILE="/etc/crontabs/root"
 DNSMASQ_DATA_FILE_BYPASS="/tmp/dnsmasq*.d/00-ruantiblock_bypass.dnsmasq"
 DNSMASQ_DATA_FILE_USER_INSTANCES="/tmp/dnsmasq*.d/01-ruantiblock_user_instances.dnsmasq"
 DNSMASQ_DATA_FILE="/tmp/dnsmasq*.d/02-ruantiblock.dnsmasq"
-DNSMASQ_DATA_FILE_BYPASS_TMP="${DNSMASQ_DATA_FILE_BYPASS}.tmp"
-DNSMASQ_DATA_FILE_USER_INSTANCES_TMP="${DNSMASQ_DATA_FILE_USER_INSTANCES}.tmp"
-DNSMASQ_DATA_FILE_TMP="${DNSMASQ_DATA_FILE}.tmp"
+DNSMASQ_DATA_FILE_BYPASS_TMP="$${DNSMASQ_DATA_FILE_BYPASS}.tmp"
+DNSMASQ_DATA_FILE_USER_INSTANCES_TMP="$${DNSMASQ_DATA_FILE_USER_INSTANCES}.tmp"
+DNSMASQ_DATA_FILE_TMP="$${DNSMASQ_DATA_FILE}.tmp"
 
 test -e "$$FILE_MAIN_SCRIPT" && $$FILE_MAIN_SCRIPT destroy
 test -e "$$FILE_INIT_SCRIPT" && $$FILE_INIT_SCRIPT disable
 rm -f $$DNSMASQ_DATA_FILE $$DNSMASQ_DATA_FILE_TMP $$DNSMASQ_DATA_FILE_BYPASS $$DNSMASQ_DATA_FILE_BYPASS_TMP $$DNSMASQ_DATA_FILE_USER_INSTANCES $$DNSMASQ_DATA_FILE_USER_INSTANCES_TMP
 
-awk -v FILE_MAIN_SCRIPT="$$FILE_MAIN_SCRIPT" '$$0 !~ FILE_MAIN_SCRIPT {
-	print $$0;
-}' "$$CRONTAB_FILE" > "$${CRONTAB_FILE}.tmp" && mv -f "$${CRONTAB_FILE}.tmp" "$$CRONTAB_FILE"
-/etc/init.d/cron restart
+if [ -f "$$CRONTAB_FILE" ]; then
+	awk -v FILE_MAIN_SCRIPT="$$FILE_MAIN_SCRIPT" '$$0 !~ FILE_MAIN_SCRIPT {
+		print $$0;
+	}' "$$CRONTAB_FILE" > "$${CRONTAB_FILE}.tmp" && mv -f "$${CRONTAB_FILE}.tmp" "$$CRONTAB_FILE"
+	/etc/init.d/cron restart
+fi
 
 exit 0
 

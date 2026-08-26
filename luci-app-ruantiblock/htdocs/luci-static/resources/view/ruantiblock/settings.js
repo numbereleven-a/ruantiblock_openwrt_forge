@@ -6,6 +6,7 @@
 'require ui';
 'require view';
 'require view.ruantiblock.tools as tools';
+'require view.ruantiblock.update-checker as updater';
 
 const USER_INSTANCES_DEFAULT = 10;
 const USER_INSTANCES_HARD_MAX = 50;
@@ -31,6 +32,52 @@ return view.extend({
 	validateUrl(section, value) {
 		return (/^$|^https?:\/\/[\w.-]+(:[0-9]{2,5})?((\/|\?).*)?$/.test(value)) ? true : _('Expecting:')
 			+ ` ${_('valid URL')}\n`;
+	},
+
+	setUpdateCheckStatus(statusElement, state, result) {
+		if(!statusElement) {
+			return;
+		};
+
+		while(statusElement.firstChild) {
+			statusElement.removeChild(statusElement.firstChild);
+		};
+
+		if(state === 'checking') {
+			statusElement.append(_('Checking...'));
+		} else if(state === 'latest') {
+			statusElement.append(_('You are using the latest release'));
+		} else if(state === 'update' && result && result.latestVersion) {
+			statusElement.append(_('Update available:') + ' ');
+			statusElement.append(E('a', {
+				'href'  : result.releaseUrl,
+				'target': '_blank',
+				'rel'   : 'noopener noreferrer',
+			}, result.latestVersion));
+		} else if(state === 'failed') {
+			statusElement.append(_('Unable to check for updates'));
+		} else {
+			statusElement.append(_('Not checked'));
+		};
+	},
+
+	handleUpdateCheck(button, statusElement, currentVersion) {
+		button.disabled = true;
+		this.setUpdateCheckStatus(statusElement, 'checking');
+
+		return this.updateChecker.check(currentVersion).then(result => {
+			if(!result || result.state === 'cancelled') {
+				return;
+			};
+
+			this.setUpdateCheckStatus(statusElement, result.state, result);
+		}).catch(() => {
+			if(this.updateChecker) {
+				this.setUpdateCheckStatus(statusElement, 'failed');
+			};
+		}).finally(() => {
+			button.disabled = false;
+		});
 	},
 
 	CBIBlockFileEdit: form.Value.extend({
@@ -129,6 +176,8 @@ return view.extend({
 		return Promise.all([
 			fs.exec(tools.execPath, [ 'raw-status' ]),
 			L.resolveDefault(fs.list(tools.parsersDir), null),
+			L.resolveDefault(fs.read(tools.versionFile), ''),
+			L.resolveDefault(fs.read(tools.luciVersionFile), ''),
 			uci.load(tools.appName),
 		]).catch(e => {
 			ui.addNotification(null, E('p', _('Unable to read the contents')
@@ -144,8 +193,12 @@ return view.extend({
 		};
 		this.appStatusCode = data[0].code;
 		let p_dir_arr      = data[1];
+		let coreVersion    = tools.normalizeValue(data[2]) || '-';
+		let luciVersion    = tools.normalizeValue(data[3]) || '-';
 		let curent_module  = uci.get(tools.appName, 'config', 'bllist_module');
 		let curent_preset  = uci.get(tools.appName, 'config', 'bllist_preset');
+
+		this.updateChecker = updater;
 
 		if(p_dir_arr) {
 			p_dir_arr.forEach(e => {
@@ -240,6 +293,35 @@ return view.extend({
 			_('Update at startup'));
 		o.description = _('Update blacklist after system startup');
 		o.rmempty = false;
+
+		// VERSION_AND_UPDATE_CHECK
+		o = s.taboption('general_tab', form.DummyValue, '_versions_and_updates',
+			_('Versions and updates'));
+		o.cfgvalue = function() {
+			return '';
+		};
+		o.renderWidget = () => {
+			let statusElement = E('div', {
+				'class': 'cbi-value-description',
+				'style': 'margin-top:0.5em;'
+			}, _('Not checked'));
+			let checkButton = E('button', {
+				'class': 'btn cbi-button-action',
+				'type' : 'button',
+				'click': () => this.handleUpdateCheck(
+					checkButton, statusElement, coreVersion),
+			}, _('Check for updates'));
+
+			return E('div', {}, [
+				E('div', {}, [
+					_('Core') + ': ' + coreVersion,
+					' · ',
+					_('LuCI') + ': ' + luciVersion,
+				]),
+				E('div', { 'style': 'margin-top:0.5em;' }, checkButton),
+				statusElement,
+			]);
+		};
 
 		// PROXY_LOCAL_CLIENTS
 		o = s.taboption('general_tab', form.Flag, 'proxy_local_clients',
@@ -563,12 +645,19 @@ return view.extend({
 		ss.sortable       = false;
 		ss.nodescriptions = true;
 		ss.modaltitle     = `${_('User entries')} - %s`;
-		ss.max_cols       = 2;
+		ss.max_cols       = 3;
 
 
 		/* User entries main settings tab */
 
 		ss.tab('u_main_tab', _('Main settings'));
+
+		// User list identifier (display-only)
+		o = ss.taboption('u_main_tab', form.DummyValue, '_u_list_id', _('List'));
+		o.modalonly = false;
+		o.textvalue = function(section_id) {
+			return section_id;
+		};
 
 		// description
 		o = ss.taboption('u_main_tab', form.Value, 'u_description',
@@ -744,7 +833,14 @@ return view.extend({
 				};
 				tasks.push(res);
 			});
-		return Promise.all(tasks);
+	return Promise.all(tasks);
+	},
+
+	remove() {
+		if(this.updateChecker) {
+			this.updateChecker.cancel();
+			this.updateChecker = null;
+		};
 	},
 
 	handleSaveApply(ev, mode) {

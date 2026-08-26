@@ -38,6 +38,7 @@ return baseclass.extend({
 	appName             : 'ruantiblock',
 	execPath            : '/usr/bin/ruantiblock',
 	versionFile         : '/usr/share/ruantiblock/version',
+	luciVersionFile     : '/usr/share/luci-app-ruantiblock/version',
 	tokenFile           : '/var/run/ruantiblock.token',
 	parsersDir          : '/usr/libexec/ruantiblock',
 	torrcFile           : '/etc/tor/torrc',
@@ -121,13 +122,31 @@ return baseclass.extend({
 		return (v && typeof(v) === 'string') ? v.trim().replace(/\r?\n/g, '') : v;
 	},
 
+	makeVpnRouteDiagnosticString(diagnostic) {
+		if(typeof(diagnostic) !== 'string') {
+			return '';
+		};
+
+		diagnostic = diagnostic.trim();
+		if(!diagnostic || diagnostic === 'OK' || diagnostic === 'Service is disabled') {
+			return '';
+		};
+
+		return E('pre', {
+			'class': 'vpn-route-diagnostic-output',
+			'style': 'white-space:pre-wrap; margin:0.5em 0 0;'
+		}, diagnostic);
+	},
+
 	makeStatusString(
 					app_status_code,
 					bllist_preset,
 					bllist_module,
-					vpn_route_status_code) {
+					vpn_route_status_code,
+					vpn_route_diagnostic) {
 		let app_status_label;
 		let spinning = '';
+		let vpn_route_label;
 
 		switch(app_status_code) {
 			case 0:
@@ -154,6 +173,17 @@ return baseclass.extend({
 				]);
 		};
 
+		if(app_status_code == 2) {
+			vpn_route_label = this.infoLabelStopped;
+		} else if(vpn_route_status_code != 0) {
+			vpn_route_label = [
+				E('span', { 'class': 'label-status error' }, _('Error')),
+				this.makeVpnRouteDiagnosticString(vpn_route_diagnostic),
+			];
+		} else {
+			vpn_route_label = _('All VPN routes are operational');
+		};
+
 		return E('table', { 'class': 'table' }, [
 			E('tr', { 'class': 'tr' }, [
 				E('td', { 'class': 'td left', 'style': 'width:33%' }, _('Status')),
@@ -161,7 +191,7 @@ return baseclass.extend({
 					app_status_label,
 					(app_status_code != 2 && vpn_route_status_code != 0)
 						? E('span', { 'class': 'label-status error' },
-							_('VPN routing error! Need restart'))
+							_('VPN routing error! See details'))
 						: '',
 				]),
 			]),
@@ -181,6 +211,10 @@ return baseclass.extend({
 						:
 							_('Error') + '!'
 				),
+			]),
+			E('tr', { 'class': 'tr' }, [
+				E('td', { 'class': 'td left' }, _('VPN routing details')),
+				E('td', { 'class': 'td left' }, vpn_route_label),
 			]),
 		]);
 	},

@@ -604,8 +604,14 @@ msgstr "VPN интерфейс"
 msgid "VPN mode"
 msgstr "Режим VPN"
 
-msgid "VPN routing error! Need restart"
-msgstr "Ошибка маршрутизации VPN! Необходим перезапуск"
+msgid "VPN routing details"
+msgstr "Подробности маршрутизации VPN"
+
+msgid "All VPN routes are operational"
+msgstr "Все VPN-маршруты работают"
+
+msgid "VPN routing error! See details"
+msgstr "Ошибка маршрутизации VPN! См. подробности"
 
 msgid "all"
 msgstr "все"
@@ -651,3 +657,30 @@ msgstr "верный IP-адрес#порт"
 
 msgid "valid URL"
 msgstr "верный URL"
+
+msgid "Versions and updates"
+msgstr "Версии и обновления"
+
+msgid "Core"
+msgstr "Основной пакет"
+
+msgid "LuCI"
+msgstr "LuCI"
+
+msgid "Check for updates"
+msgstr "Проверить обновления"
+
+msgid "Not checked"
+msgstr "Проверка не выполнялась"
+
+msgid "Checking..."
+msgstr "Проверка..."
+
+msgid "You are using the latest release"
+msgstr "Установлена последняя версия"
+
+msgid "Update available:"
+msgstr "Доступно обновление:"
+
+msgid "Unable to check for updates"
+msgstr "Не удалось проверить обновления"

@@ -58,7 +58,7 @@ NftRouteAdd() {
         if [ -n "$_vpn_gw_ip" ]; then
             _vpn_ip="$_vpn_gw_ip"
         else
-            _vpn_ip=$($IP_CMD addr list dev "$_if_vpn" 2> /dev/null | $AWK_CMD '/inet/{f=($3 == "peer") ? 4 : 2; sub("/[0-9]{1,2}$", "", $f); print $f; exit}')
+            _vpn_ip=$($IP_CMD -4 addr list dev "$_if_vpn" 2> /dev/null | $AWK_CMD '/inet/{f=($3 == "peer") ? 4 : 2; sub("/[0-9]{1,2}$", "", $f); print $f; exit}')
         fi
         if [ "$_type" = "vpn" ]; then
             if [ -d "/proc/sys/net/ipv4/conf/${_if_vpn}" ]; then

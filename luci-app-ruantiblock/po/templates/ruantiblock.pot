@@ -560,7 +560,13 @@ msgstr ""
 msgid "VPN mode"
 msgstr ""
 
-msgid "VPN routing error! Need restart"
+msgid "VPN routing details"
+msgstr ""
+
+msgid "All VPN routes are operational"
+msgstr ""
+
+msgid "VPN routing error! See details"
 msgstr ""
 
 msgid "all"
@@ -606,4 +612,31 @@ msgid "valid address#port"
 msgstr ""
 
 msgid "valid URL"
+msgstr ""
+
+msgid "Versions and updates"
+msgstr ""
+
+msgid "Core"
+msgstr ""
+
+msgid "LuCI"
+msgstr ""
+
+msgid "Check for updates"
+msgstr ""
+
+msgid "Not checked"
+msgstr ""
+
+msgid "Checking..."
+msgstr ""
+
+msgid "You are using the latest release"
+msgstr ""
+
+msgid "Update available:"
+msgstr ""
+
+msgid "Unable to check for updates"
 msgstr ""

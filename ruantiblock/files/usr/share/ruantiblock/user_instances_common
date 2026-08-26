@@ -40,7 +40,7 @@ GetUserInstances() {
         fi
         ClearUserInstanceVars
     done
-    printf "$_instances"
+    printf '%s' "$_instances"
 }
 
 SetUserInstancesItems() {

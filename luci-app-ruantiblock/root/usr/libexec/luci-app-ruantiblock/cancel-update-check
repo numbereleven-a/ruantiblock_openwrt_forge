@@ -1,0 +1,15 @@
+#!/bin/sh
+
+PID_FILE="/tmp/ruantiblock-update-check.pid"
+
+if [ -r "$PID_FILE" ]; then
+	PID="$(cat "$PID_FILE" 2>/dev/null)"
+	case "$PID" in
+		''|*[!0-9]*) exit 0 ;;
+	esac
+
+	kill "$PID" 2>/dev/null || true
+	rm -f "$PID_FILE"
+fi
+
+exit 0

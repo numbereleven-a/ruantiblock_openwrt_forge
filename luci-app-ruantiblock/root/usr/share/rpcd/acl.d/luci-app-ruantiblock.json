@@ -5,6 +5,9 @@
 			"cgi-io": [ "exec" ],
 			"file": {
 				"/usr/share/ruantiblock/version": [ "read" ],
+				"/usr/share/luci-app-ruantiblock/version": [ "read" ],
+				"/usr/libexec/luci-app-ruantiblock/check-updates": [ "exec" ],
+				"/usr/libexec/luci-app-ruantiblock/cancel-update-check": [ "exec" ],
 				"/usr/libexec/ruantiblock": [ "list" ],
 				"/etc/ruantiblock/fqdn_filter": [ "read" ],
 				"/etc/ruantiblock/ip_filter": [ "read" ],

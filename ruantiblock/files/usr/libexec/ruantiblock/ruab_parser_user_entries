@@ -11,7 +11,7 @@ echo | $AWK_CMD -v WGET_CMD="$WGET_CMD" -v WGET_PARAMS="$WGET_PARAMS" \
         attempt_err_pattern = "User entries download attempt %s: failed [%s:%s]";
         U_NAME = ENVIRON["U_NAME"];
         U_ENTRIES_REMOTE = ENVIRON["U_ENTRIES_REMOTE"];
-        U_USER_ENTRIES_DNS = ENVIRON["U_ENTRIES_DNS"];
+        U_ENTRIES_DNS = ENVIRON["U_ENTRIES_DNS"];
         NFT_TABLE = ENVIRON["NFT_TABLE"];
         NFTSET_CIDR_STRING = ENVIRON["I_NFTSET_CIDR_STRING"];
         NFTSET_IP_STRING = ENVIRON["I_NFTSET_IP_STRING"];
@@ -44,8 +44,8 @@ echo | $AWK_CMD -v WGET_CMD="$WGET_CMD" -v WGET_PARAMS="$WGET_PARAMS" \
         return _str;
     };
     function writeDNSData(val, dns) {
-        if(length(dns) == 0 && length(U_USER_ENTRIES_DNS) > 0) {
-            dns = U_USER_ENTRIES_DNS;
+        if(length(dns) == 0 && length(U_ENTRIES_DNS) > 0) {
+            dns = U_ENTRIES_DNS;
         };
         if(length(dns) > 0) {
             printf "server=/%s/%s\n", val, dns >> DNSMASQ_DATA_FILE;
