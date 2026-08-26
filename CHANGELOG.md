@@ -43,8 +43,9 @@ opkg install ./luci-app-ruantiblock_2.1.15-r9_all.ipk
 
 #### Fixed
 
-- Rebuilt user DNS configuration from current settings instead of stale instance data.
-- Fixed cleanup of nftables state during service shutdown and restart.
+- Stopped using stale routing settings for user lists: they are rebuilt from the current configuration after changes.
+- Rebuilt the DNS configuration for user lists after their VPN or proxy settings change.
+- Removed nftables sets for disabled or deleted user lists.
 - Made blacklist download failures stop the affected update cleanly without leaving partial data active.
 - Handled missing crontab entries without aborting package removal or service maintenance.
 
@@ -58,8 +59,9 @@ opkg install ./luci-app-ruantiblock_2.1.15-r9_all.ipk
 
 #### Исправлено
 
-- Пользовательская DNS-конфигурация пересобирается по текущим настройкам, а не по устаревшим данным экземпляра.
-- Исправлена очистка состояния nftables при остановке и перезапуске службы.
+- Устранено использование устаревших настроек маршрутизации пользовательских списков: после изменений они строятся заново по текущей конфигурации.
+- Исправлена пересборка DNS-конфигурации пользовательских списков после изменения настроек VPN или прокси.
+- Исправлено удаление nftables-наборов отключённых или удалённых пользовательских списков.
 - Ошибка загрузки чёрного списка теперь корректно прерывает его обновление без активации неполных данных.
 - Обработано отсутствие записей crontab, чтобы оно не прерывало удаление пакета и обслуживание службы.
 
