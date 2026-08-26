@@ -9,6 +9,30 @@ Package versions:
 - `ruantiblock-mod-lua` — `2.1.12-r5`
 - `ruantiblock-mod-py` — `2.1.12-r5`
 
+## Upgrade note / Примечание об обновлении
+
+### English
+
+If the separate `luci-i18n-ruantiblock-ru` package is installed, remove it once before installing the new LuCI package:
+
+```sh
+opkg remove luci-i18n-ruantiblock-ru
+opkg install ./luci-app-ruantiblock_2.1.15-r9_all.ipk
+```
+
+Do not remove `luci-app-ruantiblock` or its configuration files. This step is only needed when switching from the old separate translation package; future LuCI upgrades can be installed normally.
+
+### Русский
+
+Если установлен отдельный пакет `luci-i18n-ruantiblock-ru`, перед первым обновлением удалите его:
+
+```sh
+opkg remove luci-i18n-ruantiblock-ru
+opkg install ./luci-app-ruantiblock_2.1.15-r9_all.ipk
+```
+
+Сам пакет `luci-app-ruantiblock` и его конфигурационные файлы удалять не нужно. Этот шаг требуется только при переходе со старого отдельного пакета локализации; дальнейшие обновления LuCI устанавливаются обычным способом.
+
 ### English
 
 #### Added
