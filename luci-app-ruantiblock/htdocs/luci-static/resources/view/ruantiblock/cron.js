@@ -5,21 +5,24 @@
 'require view.ruantiblock.tools as tools';
 
 return view.extend({
-	crontabRegexp: new RegExp(
-		`^(\\*?\\/?(\\d){0,2}\\s){5}${tools.execPath} update`),
-
 	currentCrontabLines: [],
+
+	isRuantiblockTask(line) {
+		let fields = String(line || '').trim().split(/\s+/);
+		return fields.length >= 6 &&
+			fields.slice(5).join(' ') === tools.execPath + ' update';
+	},
 
 	toDD(n){
 		return String(n).replace(/^(\d)$/, "0$1");
 	},
 
 	cronStatusString(s) {
-		return s || _('No Sсhedule');
+		return s || _('No Schedule');
 	},
 
 	stringifyRuabTasks(str_array) {
-		let current_tasks = str_array.filter(s => s.match(this.crontabRegexp));
+		let current_tasks = str_array.filter(s => this.isRuantiblockTask(s));
 		return current_tasks.join('\n');
 	},
 
@@ -30,9 +33,8 @@ return view.extend({
 	},
 
 	writeCronFile() {
-		let btn_cron_add   = document.getElementById('btn_cron_add');
-		let btn_cron_del   = document.getElementById('btn_cron_del');
-		let crontab_string = this.currentCrontabLines.join('\n');
+		let crontab_string = this.currentCrontabLines.length ?
+			this.currentCrontabLines.join('\n') + '\n' : '';
 
 		return fs.write(tools.crontabFile, crontab_string).then(rc => {
 				ui.addNotification(null, E('p',_('Changes have been saved.')), 'info');
@@ -43,7 +45,7 @@ return view.extend({
 						return tools.handleServiceAction('cron', 'enable');
 					};
 				});
-			}).finally(() => {
+			}).then(() => {
 				return tools.handleServiceAction('cron', 'restart');
 			}).catch(e => {
 				ui.addNotification(null, E('p', _('Unable to save the changes')
@@ -55,7 +57,7 @@ return view.extend({
 
 	delRuabSchedules() {
 		this.currentCrontabLines = this.currentCrontabLines.filter(
-			s => s.match(this.crontabRegexp) ? false : true);
+			s => !this.isRuantiblockTask(s));
 	},
 
 	delCronSchedule(ev) {
@@ -68,7 +70,7 @@ return view.extend({
 		let day_interval  = document.getElementById('cron_day_interval').value;
 		let hour          = document.getElementById('cron_hour').value;
 		let min           = document.getElementById('cron_min').value;
-		let task_string   = '%s %s %s * * %s update\n'.format(
+		let task_string   = '%s %s %s * * %s update'.format(
 			min,
 			(!hour_interval) ? hour :
 				(hour_interval == "1") ?

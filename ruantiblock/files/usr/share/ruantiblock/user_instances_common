@@ -44,7 +44,7 @@ GetUserInstances() {
 }
 
 SetUserInstancesItems() {
-    local _i=0 _inst _instances_all="" _instances_all_fnames="" _instances_vpn="" _instances_vpn_fnames="" _instances_cfg=""  _instances_cfg_fnames=""
+    local _i=0 _inst _instances_all="" _instances_all_fnames="" _instances_vpn="" _instances_vpn_fnames="" _instances_tproxy_fnames="" _instances_cfg=""  _instances_cfg_fnames=""
     for _inst in $(ListUserInstances)
     do
         IncludeUserInstanceVars "$_inst"
@@ -54,6 +54,8 @@ SetUserInstancesItems() {
             if [ "$U_PROXY_MODE" = "2" ]; then
                 _instances_vpn="${_instances_vpn}${U_NAME} "
                 _instances_vpn_fnames="${_instances_vpn_fnames}${_inst} "
+            elif [ "$U_PROXY_MODE" = "3" -a "$U_T_PROXY_TYPE" = "1" ]; then
+                _instances_tproxy_fnames="${_instances_tproxy_fnames}${_inst} "
             fi
             _i=$(($_i + 1))
         fi
@@ -65,11 +67,12 @@ SetUserInstancesItems() {
     USER_INSTANCES_ALL_FNAMES="$_instances_all_fnames"
     USER_INSTANCES_VPN="$_instances_vpn"
     USER_INSTANCES_VPN_FNAMES="$_instances_vpn_fnames"
+    USER_INSTANCES_TPROXY_FNAMES="$_instances_tproxy_fnames"
     USER_INSTANCES_CFG="$_instances_cfg"
     USER_INSTANCES_CFG_FNAMES="$_instances_cfg_fnames"
 
     if [ $DEBUG -ge 2 ]; then
-        echo "  user_instances_common.SetUserInstancesItems: USER_INSTANCES_ALL=\"${USER_INSTANCES_ALL}\"; USER_INSTANCES_ALL_FNAMES=\"${USER_INSTANCES_ALL_FNAMES}\"; USER_INSTANCES_VPN=\"${USER_INSTANCES_VPN}\"; USER_INSTANCES_VPN_FNAMES=\"${USER_INSTANCES_VPN_FNAMES}\"" >&2
-        MakeLogRecord "debug" "user_instances_common.SetUserInstancesItems: USER_INSTANCES_ALL=\"${USER_INSTANCES_ALL}\"; USER_INSTANCES_ALL_FNAMES=\"${USER_INSTANCES_ALL_FNAMES}\"; USER_INSTANCES_VPN=\"${USER_INSTANCES_VPN}\"; USER_INSTANCES_VPN_FNAMES=\"${USER_INSTANCES_VPN_FNAMES}\""
+        echo "  user_instances_common.SetUserInstancesItems: USER_INSTANCES_ALL=\"${USER_INSTANCES_ALL}\"; USER_INSTANCES_ALL_FNAMES=\"${USER_INSTANCES_ALL_FNAMES}\"; USER_INSTANCES_VPN=\"${USER_INSTANCES_VPN}\"; USER_INSTANCES_VPN_FNAMES=\"${USER_INSTANCES_VPN_FNAMES}\"; USER_INSTANCES_TPROXY_FNAMES=\"${USER_INSTANCES_TPROXY_FNAMES}\"" >&2
+        MakeLogRecord "debug" "user_instances_common.SetUserInstancesItems: USER_INSTANCES_ALL=\"${USER_INSTANCES_ALL}\"; USER_INSTANCES_ALL_FNAMES=\"${USER_INSTANCES_ALL_FNAMES}\"; USER_INSTANCES_VPN=\"${USER_INSTANCES_VPN}\"; USER_INSTANCES_VPN_FNAMES=\"${USER_INSTANCES_VPN_FNAMES}\"; USER_INSTANCES_TPROXY_FNAMES=\"${USER_INSTANCES_TPROXY_FNAMES}\""
     fi
 }

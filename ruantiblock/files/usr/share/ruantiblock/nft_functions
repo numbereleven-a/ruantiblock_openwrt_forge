@@ -146,13 +146,11 @@ NftDeleteActionChains() {
 }
 
 NftInstanceAdd() {
-    local _i _inst _first_chain_type _t_proxy_statement _chain_action_type _set
-
-    for _i in "_name" "_pkts_mark" "_proxy_mode" "_tor_trans_port" "_route_table_id" "_if_vpn" "_t_proxy_type" "_t_proxy_port_tcp" "_t_proxy_port_udp" "_t_proxy_allow_udp" "_enable_bllist_proxy" "_enable_fproxy" "_vpn_gw_ip"
-    do
-        eval "local $_i=$1"
-        shift
-    done
+    local _inst _first_chain_type _t_proxy_statement _chain_action_type _set
+    local _name="$1" _pkts_mark="$2" _proxy_mode="$3" _tor_trans_port="$4" _route_table_id="$5" _if_vpn="$6" _t_proxy_type="$7" _t_proxy_port_tcp="$8" _t_proxy_port_udp="$9" _t_proxy_allow_udp="${10}" _enable_bllist_proxy="${11}" _enable_fproxy="${12}" _vpn_gw_ip="${13}"
+    _name="${_name#\"}"; _name="${_name%\"}"
+    _if_vpn="${_if_vpn#\"}"; _if_vpn="${_if_vpn%\"}"
+    _vpn_gw_ip="${_vpn_gw_ip#\"}"; _vpn_gw_ip="${_vpn_gw_ip%\"}"
 
     _inst="$_name"
     if [ "$_name" = " " ]; then

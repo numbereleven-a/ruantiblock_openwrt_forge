@@ -311,7 +311,7 @@ msgstr "Имя"
 msgid "Nftables rules"
 msgstr "Правила Nftables"
 
-msgid "No Sсhedule"
+msgid "No Schedule"
 msgstr "Нет расписания"
 
 msgid "No changes to save."

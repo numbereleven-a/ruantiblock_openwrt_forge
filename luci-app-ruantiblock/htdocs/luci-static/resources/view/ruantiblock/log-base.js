@@ -41,7 +41,7 @@ document.head.append(E('style', {'type': 'text/css'},
 #logWrapper {
 	overflow: auto !important;
 	width: 100%;
-	min-height: 20em';
+	min-height: 20em;
 }
 .log-empty {
 }
@@ -49,10 +49,10 @@ document.head.append(E('style', {'type': 'text/css'},
 	background-color: var(--app-log-emerg-color) !important;
 	color: var(--app-log-light-font-color);
 }
-log-emerg .td {
+.log-emerg .td {
 	color: var(--app-log-light-font-color) !important;
 }
-log-emerg td {
+.log-emerg td {
 	color: var(--app-log-light-font-color) !important;
 }
 .log-alert {
@@ -611,25 +611,29 @@ return baseclass.extend({
 		setStringFilter(entriesArray, fieldNum, pattern) {
 			let not     = pattern.startsWith('!');
 			pattern     = pattern.replace(/^!/, '');
+			let needle  = (fieldNum == 5) ? this.htmlEntities(pattern) : pattern;
 			let isHFunc = (typeof(this.filterHighlightFunc) == 'function');
 			let fArr    = [];
-			if(!pattern) {
+			if(!needle) {
 				return entriesArray;
 			};
 			entriesArray.forEach((e, i) => {
 				if(e[fieldNum] == null) {
 					return;
 				};
+				let value = String(e[fieldNum]);
 				if(not) {
-					if(!(e[fieldNum].includes(pattern))) {
+					if(!value.includes(needle)) {
 						fArr.push(e);
 					};
 				} else {
-					if(e[fieldNum].includes(pattern)) {
+					if(value.includes(needle)) {
+						let entry = e.slice();
 						if(isHFunc) {
-							e[fieldNum] = e[fieldNum].replace(pattern, this.filterHighlightFunc);
+							entry[fieldNum] = value.split(needle).join(
+								this.filterHighlightFunc(needle));
 						};
-						fArr.push(e);
+						fArr.push(entry);
 					};
 				};
 			});
@@ -656,10 +660,12 @@ return baseclass.extend({
 						};
 					} else {
 						if(regExp.test(e[fieldNum])) {
+							let entry = e.slice();
 							if(isHFunc) {
-								e[fieldNum] = e[fieldNum].replace(regExp, this.filterHighlightFunc);
+								entry[fieldNum] = String(e[fieldNum])
+									.replace(regExp, this.filterHighlightFunc);
 							};
-							fArr.push(e);
+							fArr.push(entry);
 						};
 					};
 					regExp.lastIndex = 0;
@@ -1057,6 +1063,10 @@ return baseclass.extend({
 		},
 
 		load() {
+			this.actionButtons        = [];
+			this.logLevelsStat        = {};
+			this.facilityFilterValue  = [];
+			this.levelFilterValue     = [];
 			this.restoreSettingsFromLocalStorage();
 			if(!this.enableAutoRefresh || typeof(this.getLogHash) != 'function') {
 				this.autorefreshOn    = false;
@@ -1066,6 +1076,17 @@ return baseclass.extend({
 				this.convertTimestampOn = true;
 			};
 			return this.getLogData(this.tailValue);
+		},
+
+		remove() {
+			if(this.pollFuncWrapper) {
+				poll.remove(this.pollFuncWrapper);
+			};
+			if(this.logSideBlock && this.logSideBlock.parentNode) {
+				this.logSideBlock.parentNode.removeChild(this.logSideBlock);
+			};
+			this.logSideBlock = null;
+			this.actionButtons = [];
 		},
 
 		render(logdata) {
@@ -1258,8 +1279,10 @@ return baseclass.extend({
 									this.moreEntriesRowBtn,
 									this.allEntriesBtn, this.filterModalBtn);
 
-			document.body.append(
-				E('div', {
+			if(this.logSideBlock && this.logSideBlock.parentNode) {
+				this.logSideBlock.parentNode.removeChild(this.logSideBlock);
+			};
+			this.logSideBlock = E('div', {
 					'align': 'right',
 					'class': 'log-side-block',
 				}, [
@@ -1283,8 +1306,8 @@ return baseclass.extend({
 							ev.target.blur();
 						},
 					}, '&#8595;'),
-				])
-			);
+				]);
+			document.body.append(this.logSideBlock);
 
 			if(this.autorefreshOn && this.autoRefreshValue) {
 				poll.add(this.pollFuncWrapper, this.pollInterval);

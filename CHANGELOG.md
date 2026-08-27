@@ -1,5 +1,149 @@
 # Changelog / История изменений
 
+## 2.1.16-r1 core package
+
+Package version:
+
+- `ruantiblock` — `2.1.16-r1`
+
+### English
+
+#### Fixed
+
+- UCI no longer overwrites missing options, including `BLLIST_MODULE` and `dnsmasq_confdir`.
+- Stale PID files no longer block startup and updates.
+- Fixed the AWK configuration syntax.
+- Fixed hotplug status handling.
+- Fixed unquoted numeric arguments in `NftInstanceAdd` callers so values such as `90 40` no longer shift subsequent parameters.
+
+#### Security
+
+- Removed `eval`-based assignment in `NftInstanceAdd` and quoted all positional arguments, preventing shell injection via crafted UCI values and argument-shift via spaces.
+- Hardened UCI parsing in `config_script` and `config_script_user_instances` by escaping `\`, `$` and `` ` `` inside values before `eval`, blocking command substitution.
+- Escaped `\`, `"`, `$` and `` ` `` in URLs inside `ruab_parser_user_entries` before constructing the shell `wget` command.
+
+### Русский
+
+#### Исправления
+
+- UCI больше не затирает отсутствующие параметры, включая `BLLIST_MODULE` и `dnsmasq_confdir`.
+- Устаревшие PID-файлы больше не блокируют запуск и обновление.
+- Исправлен AWK-синтаксис конфигурации.
+- Исправлена обработка статусов в hotplug.
+- Исправлена передача неквотированных числовых аргументов в `NftInstanceAdd` — значения вроде `90 40` больше не сдвигают последующие параметры.
+
+#### Безопасность
+
+- Убран `eval` в `NftInstanceAdd`, все позиционные аргументы квотированы — исключена инъекция через crafted UCI и сдвиг аргументов пробелами.
+- Ужесточён разбор UCI в `config_script` и `config_script_user_instances` — `\`, `$` и `` ` `` в значениях экранируются перед `eval`.
+- В `ruab_parser_user_entries` экранированы `\`, `"`, `$` и `` ` `` в URL перед сборкой shell-команды `wget`.
+
+## 2.1.15-r4 core package
+
+Package version:
+
+- `ruantiblock` — `2.1.15-r4`
+
+### English
+
+#### Fixed
+
+- Preserved external `BLLIST_MODULE` and instance defaults when the corresponding UCI options are absent.
+- Corrected the generated AWK blocks so UCI configuration is parsed without syntax errors.
+- Ignored stale start and update PID files when their processes are no longer running.
+- Rebuilt route-table cleanup from the previously active instance mapping, avoiding route-table deletion for disabled instances.
+- Fixed hotplug status handling so empty, starting, updating, disabled, and error states do not trigger an unnecessary reload.
+
+### Русский
+
+#### Исправления
+
+- Сохранены внешний `BLLIST_MODULE` и значения по умолчанию для экземпляров, если соответствующие параметры отсутствуют в UCI.
+- Исправлены сгенерированные блоки AWK, поэтому конфигурация UCI разбирается без синтаксических ошибок.
+- Устаревшие PID-файлы запуска и обновления теперь игнорируются, если соответствующие процессы больше не работают.
+- Очистка таблиц маршрутизации выполняется по предыдущей карте активных экземпляров, поэтому таблицы выключенных экземпляров не удаляются.
+- Исправлена обработка статусов в hotplug: пустой статус, запуск, обновление, отключённое состояние и ошибка больше не вызывают лишнюю перезагрузку.
+
+## 2.1.16-r1 LuCI package
+
+Package version:
+
+- `luci-app-ruantiblock` — `2.1.16-r1`
+
+### English
+
+#### Changed
+
+- Strengthened address validation: IP octets must be in the `0–255` range and ports in the `0–65535` range.
+- Cron is no longer reloaded after a failed crontab write.
+
+#### Fixed
+
+- Fixed LuCI log loading: available `logread` paths and additional filter parameters are now handled.
+- Fixed stale blacklist preset data after reopening the settings page.
+- Fixed handling of incomplete statistics responses so empty or missing data does not break the interface.
+- Fixed service status refresh after a polling error so the interface does not keep stale state.
+- Fixed cron task detection, including correct removal of its own entries and writing an empty crontab.
+- Fixed update-helper file permissions so the helpers run correctly after package installation.
+- Escaped HTML output in the dnsmasq tables on the information page.
+
+#### Security
+
+- Moved the update-check PID file from `/tmp` to `/var/run/luci-app-ruantiblock/`.
+- Added a `/proc/<PID>/comm` check before killing the process.
+- Replaced the broad ACL glob `/usr/bin/ruantiblock*` with an explicit list of UI commands.
+
+### Русский
+
+#### Изменения
+
+- Усилена проверка адресов: IP-октеты должны быть в диапазоне `0–255`, а порт — в диапазоне `0–65535`.
+- Cron больше не перезагружается после неудачной записи его конфигурации.
+
+#### Исправления
+
+- Исправлена загрузка LuCI-логов: теперь учитываются доступные пути `logread` и дополнительные параметры фильтрации.
+- Исправлено сохранение устаревших данных blacklist-пресетов после повторного открытия страницы настроек.
+- Исправлена обработка неполных ответов статистики, чтобы пустые или отсутствующие данные не вызывали ошибку интерфейса.
+- Исправлено обновление статуса службы после ошибки опроса, чтобы интерфейс не оставался с устаревшим состоянием.
+- Исправлено распознавание заданий cron, включая корректное удаление собственных записей и запись пустого crontab.
+- Исправлены права update-helper-файлов, чтобы они корректно запускались после установки пакета.
+- Экранирован HTML-вывод таблиц dnsmasq на странице информации.
+
+#### Безопасность
+
+- PID-файл проверки обновлений перенесён из `/tmp` в `/var/run/luci-app-ruantiblock/`.
+- Перед kill добавлена проверка `/proc/<PID>/comm`.
+- Широкий шаблон ACL `/usr/bin/ruantiblock*` заменён явным списком команд интерфейса.
+
+## 2.1.15-r10 LuCI package
+
+Package version:
+
+- `luci-app-ruantiblock` — `2.1.15-r10`
+
+### English
+
+#### Fixed
+
+- Fixed LuCI log loading for available `logread` paths and timestamped filters.
+- Fixed stale blacklist preset data after returning to the settings page.
+- Fixed delayed service restart after applying settings.
+- Fixed cron task detection, empty crontab writing, and unnecessary cron restarts after a failed write.
+- Fixed handling of incomplete statistics responses and stale service status after a failed poll.
+- Fixed comparison of release versions with an `-rN` suffix.
+
+### Русский
+
+#### Исправлено
+
+- Исправлена загрузка логов LuCI для доступных путей `logread` и фильтров с временными метками.
+- Исправлено сохранение устаревших данных о пресетах чёрного списка при повторном открытии настроек.
+- Исправлен перезапуск службы после применения настроек.
+- Исправлено определение заданий cron, запись пустого crontab и лишний перезапуск cron после ошибки записи.
+- Исправлена обработка неполных ответов статистики и обновление статуса службы после ошибки опроса.
+- Исправлено сравнение версий релизов с суффиксом `-rN`.
+
 ## 2.1.15-r9 package set
 
 Package versions:

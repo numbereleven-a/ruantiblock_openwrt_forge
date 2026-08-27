@@ -1,4 +1,5 @@
 'use strict';
+'require dom';
 'require fs';
 'require form';
 'require tools.widgets as widgets';
@@ -25,7 +26,15 @@ return view.extend({
 	},
 
 	validateIpPort(section, value) {
-		return (/^$|^([0-9]{1,3}\.){3}[0-9]{1,3}(#[\d]{2,5})?$/.test(value)) ? true : _('Expecting:')
+		if(value === '') {
+			return true;
+		};
+
+		let match = String(value).match(/^((?:[0-9]{1,3}\.){3}[0-9]{1,3})(?:#([0-9]{1,5}))?$/);
+		let validIp = match && match[1].split('.').every(e => Number(e) <= 255);
+		let validPort = match && (!match[2] || Number(match[2]) <= 65535);
+
+		return (validIp && validPort) ? true : _('Expecting:')
 			+ ` ${_('One of the following:')}\n - ${_('valid IP address')}\n - ${_('valid address#port')}\n`;
 	},
 
@@ -197,8 +206,10 @@ return view.extend({
 		let luciVersion    = tools.normalizeValue(data[3]) || '-';
 		let curent_module  = uci.get(tools.appName, 'config', 'bllist_module');
 		let curent_preset  = uci.get(tools.appName, 'config', 'bllist_preset');
+		let blacklistPresets = tools.blacklistPresets;
 
 		this.updateChecker = updater;
+		this.parsers = {};
 
 		if(p_dir_arr) {
 			p_dir_arr.forEach(e => {
@@ -211,9 +222,10 @@ return view.extend({
 
 		let availableParsers = Object.keys(this.parsers).length > 0;
 		if(!availableParsers) {
-			for(let i of Object.keys(tools.blacklistPresets)) {
-				if(!new RegExp('^($|' + tools.appName + ')').test(i) && i !== curent_preset) {
-					delete tools.blacklistPresets[i];
+			blacklistPresets = {};
+			for(let [name, preset] of Object.entries(tools.blacklistPresets)) {
+				if(new RegExp('^($|' + tools.appName + ')').test(name) || name === curent_preset) {
+					blacklistPresets[name] = preset;
 				};
 			};
 		};
@@ -401,11 +413,11 @@ return view.extend({
 			'bllist_preset', _('Blacklist update mode'));
 		bllist_preset.description = _('Blacklist sources') + ':';
 		bllist_preset.value('', _('user entries only'));
-		Object.entries(tools.blacklistPresets).forEach(e => {
+		Object.entries(blacklistPresets).forEach(e => {
 			bllist_preset.value(e[0], ((e[1][1]) ? `${e[1][0]} - ${e[1][1]}` : e[1][0]));
 		});
 		let bllist_sources = {};
-		Object.values(tools.blacklistPresets).forEach(v => { bllist_sources[v[0]] = v[2] });
+		Object.values(blacklistPresets).forEach(v => { bllist_sources[v[0]] = v[2] });
 		Object.entries(bllist_sources).forEach(e => {
 			if(e[1]) {
 				bllist_preset.description += `<br />${e[0]} - <a href="${e[1]}" target="_blank">${e[1]}</a>`;
@@ -817,20 +829,11 @@ return view.extend({
 		return map_promise;
 	},
 
-	handleSave(ev, restart) {
+	handleSave(ev) {
 		let tasks = [];
 		document.getElementById('maincontent')
 			.querySelectorAll('.cbi-map').forEach((map, i, a) => {
 				let res = DOM.callClassMethod(map, 'save');
-				if(restart && i == a.length - 1 && this.appStatusCode != 1 && this.appStatusCode != 2) {
-					res.then(() => {
-						window.setTimeout(() => {
-							fs.exec_direct(tools.execPath, [ 'restart' ]).then(
-								() => console.log(tools.execPath + ' restarted...')
-							);
-						}, 2000);
-					});
-				};
 				tasks.push(res);
 			});
 	return Promise.all(tasks);
@@ -844,8 +847,12 @@ return view.extend({
 	},
 
 	handleSaveApply(ev, mode) {
-		return this.handleSave(ev, true).then(() => {
-			ui.changes.apply(mode == '0');
+		return this.handleSave(ev).then(() => {
+			return Promise.resolve(ui.changes.apply(mode == '0'));
+		}).then(() => {
+			if(this.appStatusCode != 1 && this.appStatusCode != 2) {
+				return fs.exec_direct(tools.execPath, [ 'restart' ]);
+			};
 		});
 	},
 });

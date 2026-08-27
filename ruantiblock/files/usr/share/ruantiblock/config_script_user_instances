@@ -40,15 +40,12 @@ IncludeUserInstanceVars() {
             val  = substr($0, end + 1);
             sub(/^.*[.]/, "", name);
             gsub(/["\047]/, "", val);
+            gsub(/\\/, "\\\\", val);
+            gsub(/\$/, "\\$", val);
+            gsub(/`/, "\\`", val);
             if(name in vars_array) {
                 print toupper(name) "=\"" val "\"";
                 delete vars_array[name];
-            };
-        }
-        END {
-            if(length(vars_array) > 0) {
-                for(i in vars_array)
-                    print toupper(i) "=\"""\"";
             };
         }')
 

@@ -293,7 +293,7 @@ msgstr ""
 msgid "Nftables rules"
 msgstr ""
 
-msgid "No Sсhedule"
+msgid "No Schedule"
 msgstr ""
 
 msgid "No changes to save."

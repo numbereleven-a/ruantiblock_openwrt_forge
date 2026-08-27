@@ -15,10 +15,18 @@ function parseVersion(value) {
 		return null;
 	};
 
+	let suffix = match[2] ? match[2].split('.') : [];
+	let revision = null;
+	if(suffix.length === 1 && /^r\d+$/i.test(suffix[0])) {
+		revision = Number(suffix[0].slice(1));
+		suffix = [];
+	};
+
 	return {
 		raw       : raw,
 		numbers   : match[1].split('.').map(Number),
-		prerelease: match[2] ? match[2].split('.') : [],
+		prerelease: suffix,
+		revision  : revision,
 	};
 };
 
@@ -65,7 +73,7 @@ function compareVersions(left, right) {
 	let rightPrerelease = rightVersion.prerelease;
 
 	if(leftPrerelease.length === 0 && rightPrerelease.length === 0) {
-		return 0;
+		return (leftVersion.revision || 0) - (rightVersion.revision || 0);
 	};
 	if(leftPrerelease.length === 0) {
 		return 1;

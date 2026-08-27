@@ -332,6 +332,9 @@ return view.extend({
 			this.statusTokenValue = v;
 		}).catch(e => {
 			this.statusTokenValue = 0;
+			return this.getAppStatus().then(
+				L.bind(this.setAppStatus, this)
+			).catch(() => {});
 		});
 	},
 

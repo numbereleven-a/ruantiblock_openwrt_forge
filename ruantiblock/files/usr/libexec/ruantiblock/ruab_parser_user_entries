@@ -110,6 +110,10 @@ echo | $AWK_CMD -v WGET_CMD="$WGET_CMD" -v WGET_PARAMS="$WGET_PARAMS" \
         };
 
         _ret_code = 1;
+        gsub(/\\/, "\\\\", url);
+        gsub(/"/, "\\\"", url);
+        gsub(/\$/, "\\$", url);
+        gsub(/`/, "\\`", url);
         _wget_call = sprintf("%s %s - \"%s\"; printf \"\n$?\n\"", WGET_CMD, WGET_PARAMS, url);
 
         delete _cidr_array;

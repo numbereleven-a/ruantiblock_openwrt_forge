@@ -5,11 +5,16 @@ set -u
 API_URL="${RUANTIBLOCK_UPDATE_API_URL:-https://api.github.com/repos/numbereleven-a/ruantiblock_openwrt_forge/releases/latest}"
 CURRENT_VERSION=""
 VERSION_FILE="/usr/share/ruantiblock/version"
-PID_FILE="/tmp/ruantiblock-update-check.pid"
+RUN_DIR="/var/run/luci-app-ruantiblock"
+PID_FILE="${RUN_DIR}/update-check.pid"
 FETCH_PID=""
 
 if [ -r "$VERSION_FILE" ]; then
 	CURRENT_VERSION="$(tr -d '\r\n' < "$VERSION_FILE")"
+fi
+
+if ! mkdir -m 0755 -p "$RUN_DIR" 2>/dev/null; then
+	exit 1
 fi
 
 TMP_FILE="$(mktemp -t ruantiblock-update.XXXXXX 2>/dev/null)" || exit 1

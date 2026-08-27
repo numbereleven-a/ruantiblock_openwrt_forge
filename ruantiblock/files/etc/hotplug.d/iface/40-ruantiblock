@@ -13,7 +13,10 @@ if [ "$ACTION" = "ifup" ]; then
     IF_VPN_CURRENT=""
 
     ruab_route_status=$($RUAB_CMD raw-status)
-    [ $ruab_route_status -eq 1 -o $ruab_route_status -eq 2 ] && exit 0
+    case "$ruab_route_status" in
+        0) ;;
+        *) exit 0 ;;
+    esac
 
     UCI_CMD="$(which uci)"
     if [ $? -ne 0 ]; then

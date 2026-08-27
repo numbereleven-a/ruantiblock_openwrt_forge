@@ -17,6 +17,11 @@ document.head.append(E('style', {'type': 'text/css'},
 return view.extend({
 	pollInterval   : L.env.pollinterval,
 
+	escapeHtml(str) {
+		return String(str).replace(/&/g, '&#38;').replace(/</g, '&#60;')
+			.replace(/>/g, '&#62;').replace(/"/g, '&#34;').replace(/'/g, '&#39;');
+	},
+
 	secToTimeString(value) {
 		let string = '';
 		if(/^\d+$/.test(value)) {
@@ -44,62 +49,71 @@ return view.extend({
 
 	formatNftJson(data) {
 		let output = { 'rules': [] };
-		if(data.rules.nftables && data.rules.nftables.length > 1) {
-			for(let i of data.rules.nftables) {
+		if(!data || typeof(data) !== 'object') {
+			return output;
+		};
+
+		let rules = (data.rules && typeof(data.rules) === 'object') ? data.rules : {};
+
+		function parseDnsmasqData(set) {
+			let sArray = [];
+			if(set && Array.isArray(set.nftables) && set.nftables.length > 1) {
+				set.nftables.forEach(e => {
+					if(e.set && Array.isArray(e.set.elem)) {
+						e.set.elem.forEach(i => {
+							if(i.elem) {
+								sArray.push([ i.elem.val, i.elem.expires ]);
+							};
+						});
+					};
+				});
+			};
+			return sArray;
+		};
+
+		if(Array.isArray(rules.nftables) && rules.nftables.length > 1) {
+			for(let i of rules.nftables) {
 				if(!i.rule) {
 					continue;
 				};
 				let set, bytes;
-				i.rule.expr.forEach(e => {
-					if(e.match && e.match.left && e.match.left.payload) {
+				if(Array.isArray(i.rule.expr)) {
+					i.rule.expr.forEach(e => {
+						if(e.match && e.match.left && e.match.left.payload &&
+							typeof(e.match.right) === 'string') {
 						set = e.match.right.replace('@', '');
-					}
-					else if(e.counter) {
+						}
+						else if(e.counter) {
 						bytes = e.counter.bytes;
-					};
-				});
-				output.rules.push([ set, bytes ]);
-			};
-
-			function parseDnsmasqData(set) {
-				let sArray = [];
-				if(set.nftables && set.nftables.length > 1) {
-					set.nftables.forEach(e => {
-						if(e.set && e.set.elem) {
-							e.set.elem.forEach(i => {
-								if(i.elem) {
-									sArray.push([ i.elem.val, i.elem.expires ]);
-								};
-							});
 						};
 					});
 				};
-				return sArray;
+				output.rules.push([ set, bytes ]);
 			};
 
-			if(data.dnsmasq) {
-				output.dnsmasq = parseDnsmasqData(data.dnsmasq);
-			};
-			if(data.dnsmasq_bypass) {
-				output.dnsmasq_bypass = parseDnsmasqData(data.dnsmasq_bypass);
-			};
-			if(data.dnsmasq_user_instances) {
-				output.dnsmasq_user_instances = [];
-				if(data.dnsmasq_user_instances && data.dnsmasq_user_instances.length > 1) {
-					for(let i of data.dnsmasq_user_instances) {
-						if(i.nftables) {
-							let name;
-							i.nftables.forEach(e => {
-								if(e.set) {
-									name = e.set.name;
-								};
-							});
-							output.dnsmasq_user_instances.push([ name, parseDnsmasqData(i) ]);
+		};
+
+		if(data.dnsmasq) {
+			output.dnsmasq = parseDnsmasqData(data.dnsmasq);
+		};
+		if(data.dnsmasq_bypass) {
+			output.dnsmasq_bypass = parseDnsmasqData(data.dnsmasq_bypass);
+		};
+		if(Array.isArray(data.dnsmasq_user_instances)) {
+			output.dnsmasq_user_instances = [];
+			for(let i of data.dnsmasq_user_instances) {
+				if(i && Array.isArray(i.nftables)) {
+					let name;
+					i.nftables.forEach(e => {
+						if(e.set) {
+							name = e.set.name;
 						};
-					};
+					});
+					output.dnsmasq_user_instances.push([ name, parseDnsmasqData(i) ]);
 				};
 			};
 		};
+
 		return output;
 	},
 
@@ -107,14 +121,15 @@ return view.extend({
 		let lines   = `<tr class="tr"><td class="td center">${_('No entries available...')}</td></tr>`;
 		let ipTable = E('table', { 'id': 'ipTable', 'class': 'table' });
 
-		ipDataArray.sort((a, b) => a[1] - b[1]);
+		let entries = Array.isArray(ipDataArray) ? ipDataArray.slice() : [];
+		entries.sort((a, b) => a[1] - b[1]);
 
-		if(ipDataArray.length > 0) {
+		if(entries.length > 0) {
 			lines = [];
-			ipDataArray.forEach((e, i) => {
+			entries.forEach((e, i) => {
 				if(e) {
 					lines.push(
-						`<tr class="tr"><td class="td left" data-title="${_('IP address')}">${e[0]}</td>` +
+						`<tr class="tr"><td class="td left" data-title="${_('IP address')}">${this.escapeHtml(e[0])}</td>` +
 						`<td class="td left" data-title="${_('Timeout')}">${this.secToTimeString(e[1] | 0)}</td></tr>`
 					);
 				};
@@ -142,7 +157,7 @@ return view.extend({
 		return E([
 			E('h3', {}, title),
 			E('div', { 'class': 'log-entries-count' },
-				`${_('Entries')}: ${ipDataArray.length}`
+				`${_('Entries')}: ${entries.length}`
 			),
 			ipTable,
 		]);
@@ -205,20 +220,20 @@ return view.extend({
 				let rdTableWrapper = document.getElementById('rdTableWrapper');
 				if(rdTableWrapper) {
 					rdTableWrapper.innerHTML = '';
-					rdTableWrapper.append(this.makeDnsmasqTable(nft_data.dnsmasq, _('Dnsmasq')));
+					rdTableWrapper.append(this.makeDnsmasqTable(nft_data.dnsmasq || [], _('Dnsmasq')));
 				};
 
 				let rdsTableWrapper = document.getElementById('rdsTableWrapper');
 				if(rdsTableWrapper) {
 					rdsTableWrapper.innerHTML = '';
-					for(let i of nft_data.dnsmasq_user_instances) {
+					for(let i of (nft_data.dnsmasq_user_instances || [])) {
 						rdsTableWrapper.append(this.makeDnsmasqTable(i[1], _('Dnsmasq') + ' ' + i[0]));
 					};
 				};
 				let rdbTableWrapper = document.getElementById('rdbTableWrapper');
 				if(rdbTableWrapper) {
 					rdbTableWrapper.innerHTML = '';
-					rdbTableWrapper.append(this.makeDnsmasqTable(nft_data.dnsmasq_bypass, _('Dnsmasq bypass')));
+					rdbTableWrapper.append(this.makeDnsmasqTable(nft_data.dnsmasq_bypass || [], _('Dnsmasq bypass')));
 				};
 			} else {
 				if(poll.active()) {
@@ -402,22 +417,27 @@ return view.extend({
 			E('div', { 'class': 'cbi-section fade-in' },
 				E('div', { 'class': 'cbi-section-node' }, update_status)
 			),
-			E('div', { 'class': 'cbi-section fade-in' },
-				E('div', { 'class': 'cbi-section-node' }, rules)
-			),
 		];
 
 		if(user_entries) {
-			layout.splice(3, 0,
+			layout.push(
 				E('div', { 'class': 'cbi-section fade-in' }, [
 					E('h3', {}, _('User entries')),
 					E('div', { 'class': 'cbi-section-node' }, user_entries),
 				])
 			);
-		}
+		};
+
+		if(rules) {
+			layout.push(
+				E('div', { 'class': 'cbi-section fade-in' },
+					E('div', { 'class': 'cbi-section-node' }, rules)
+				)
+			);
+		};
 
 		if(dnsmasqBypass) {
-			layout.splice(5, 0,
+			layout.push(
 				E('div', { 'class': 'cbi-section fade-in' },
 					E('div', { 'class': 'cbi-section-node' }, dnsmasqBypass)
 				)
@@ -425,7 +445,7 @@ return view.extend({
 		};
 
 		if(dnsmasqUserInstances) {
-			layout.splice(6, 0,
+			layout.push(
 				E('div', { 'class': 'cbi-section fade-in' },
 					E('div', { 'class': 'cbi-section-node' }, dnsmasqUserInstances)
 				)
@@ -433,7 +453,7 @@ return view.extend({
 		};
 
 		if(dnsmasq) {
-			layout.splice(7, 0,
+			layout.push(
 				E('div', { 'class': 'cbi-section fade-in' },
 					E('div', { 'class': 'cbi-section-node' }, dnsmasq)
 				)

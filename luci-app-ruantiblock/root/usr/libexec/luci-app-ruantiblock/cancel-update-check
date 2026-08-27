@@ -1,14 +1,17 @@
 #!/bin/sh
 
-PID_FILE="/tmp/ruantiblock-update-check.pid"
+RUN_DIR="/var/run/luci-app-ruantiblock"
+PID_FILE="${RUN_DIR}/update-check.pid"
 
 if [ -r "$PID_FILE" ]; then
 	PID="$(cat "$PID_FILE" 2>/dev/null)"
 	case "$PID" in
-		''|*[!0-9]*) exit 0 ;;
+		''|*[!0-9]*) PID="" ;;
 	esac
 
-	kill "$PID" 2>/dev/null || true
+	if [ -n "$PID" ] && [ "$(cat "/proc/${PID}/comm" 2>/dev/null)" = "uclient-fetch" ]; then
+		kill "$PID" 2>/dev/null || true
+	fi
 	rm -f "$PID_FILE"
 fi
 

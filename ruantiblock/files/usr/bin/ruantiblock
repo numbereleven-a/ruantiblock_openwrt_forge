@@ -310,6 +310,7 @@ export USER_INSTANCES_ALL=""
 export USER_INSTANCES_ALL_FNAMES=""
 export USER_INSTANCES_VPN=""
 export USER_INSTANCES_VPN_FNAMES=""
+export USER_INSTANCES_TPROXY_FNAMES=""
 export USER_INSTANCES_CFG=""
 export USER_INSTANCES_CFG_FNAMES=""
 INSTANCES_CACHE="${RUN_FILES_DIR}/${NAME}.instances"
@@ -328,6 +329,22 @@ else
 fi
 
 ############################## Functions ###############################
+
+PidFileActive() {
+    local _pid
+    [ -r "$1" ] || return 1
+    _pid=$(cat "$1" 2> /dev/null)
+    case "$_pid" in
+        ''|*[!0-9]*|0) return 1 ;;
+    esac
+    kill -0 "$_pid" 2> /dev/null
+}
+
+ClearStalePidFile() {
+    if [ -e "$1" ] && ! PidFileActive "$1"; then
+        rm -f "$1"
+    fi
+}
 
 Help() {
 cat << EOF
@@ -624,25 +641,54 @@ AddUserInstancesNftRules() {
             _route_table_id=0
         fi
         _pkts_mark=$(($_pkts_mark + 1))
-        NftInstanceAdd "\"$U_NAME\"" $_pkts_mark ${U_PROXY_MODE:=$INSTANCES_DEF_PROXY_MODE} ${U_TOR_TRANS_PORT:=$INSTANCES_DEF_TOR_TRANS_PORT} $_route_table_id "\"${U_IF_VPN:=$INSTANCES_DEF_IF_VPN}\"" ${U_T_PROXY_TYPE:=$INSTANCES_DEF_T_PROXY_TYPE} ${U_T_PROXY_PORT_TCP:=$INSTANCES_DEF_T_PROXY_PORT_TCP} ${U_T_PROXY_PORT_UDP:=$INSTANCES_DEF_T_PROXY_PORT_UDP} ${U_T_PROXY_ALLOW_UDP:=$INSTANCES_DEF_T_PROXY_ALLOW_UDP} ${U_ENABLE_ENTRIES_REMOTE_PROXY:=$INSTANCES_DEF_ENABLE_BLLIST_PROXY} ${U_ENABLE_FPROXY:=$INSTANCES_DEF_ENABLE_FPROXY} "\"$U_VPN_GW_IP\""
+        NftInstanceAdd "\"$U_NAME\"" "$_pkts_mark" "${U_PROXY_MODE:=$INSTANCES_DEF_PROXY_MODE}" "${U_TOR_TRANS_PORT:=$INSTANCES_DEF_TOR_TRANS_PORT}" "$_route_table_id" "\"${U_IF_VPN:=$INSTANCES_DEF_IF_VPN}\"" "${U_T_PROXY_TYPE:=$INSTANCES_DEF_T_PROXY_TYPE}" "${U_T_PROXY_PORT_TCP:=$INSTANCES_DEF_T_PROXY_PORT_TCP}" "${U_T_PROXY_PORT_UDP:=$INSTANCES_DEF_T_PROXY_PORT_UDP}" "${U_T_PROXY_ALLOW_UDP:=$INSTANCES_DEF_T_PROXY_ALLOW_UDP}" "${U_ENABLE_ENTRIES_REMOTE_PROXY:=$INSTANCES_DEF_ENABLE_BLLIST_PROXY}" "${U_ENABLE_FPROXY:=$INSTANCES_DEF_ENABLE_FPROXY}" "\"$U_VPN_GW_IP\""
         ClearUserInstanceVars
     done
 }
 
 DeleteUserInstancesNftRules() {
     local _inst _i=1 _j=1
-    for _inst in $USER_INSTANCES_CFG_FNAMES
+    local _current_all="$USER_INSTANCES_ALL"
+    local _current_all_fnames="$USER_INSTANCES_ALL_FNAMES"
+    local _current_vpn="$USER_INSTANCES_VPN"
+    local _current_vpn_fnames="$USER_INSTANCES_VPN_FNAMES"
+    local _current_tproxy_fnames="$USER_INSTANCES_TPROXY_FNAMES"
+    local _current_cfg="$USER_INSTANCES_CFG"
+    local _current_cfg_fnames="$USER_INSTANCES_CFG_FNAMES"
+    local _cached_active_fnames=""
+    local _route_vpn_fnames="$USER_INSTANCES_VPN_FNAMES"
+    local _route_tproxy_fnames="$USER_INSTANCES_TPROXY_FNAMES"
+
+    if [ -r "$INSTANCES_CACHE" ]; then
+        . "$INSTANCES_CACHE"
+        _cached_active_fnames="$USER_INSTANCES_ALL_FNAMES"
+        _route_vpn_fnames="$USER_INSTANCES_VPN_FNAMES"
+        _route_tproxy_fnames="$USER_INSTANCES_TPROXY_FNAMES"
+    fi
+
+    USER_INSTANCES_ALL="$_current_all"
+    USER_INSTANCES_ALL_FNAMES="$_current_all_fnames"
+    USER_INSTANCES_VPN="$_current_vpn"
+    USER_INSTANCES_VPN_FNAMES="$_current_vpn_fnames"
+    USER_INSTANCES_TPROXY_FNAMES="$_current_tproxy_fnames"
+    USER_INSTANCES_CFG="$_current_cfg"
+    USER_INSTANCES_CFG_FNAMES="$_current_cfg_fnames"
+
+    for _inst in $_current_cfg_fnames $_cached_active_fnames
     do
-        IncludeUserInstanceVars "$_inst"
-        NftInstanceDelete "$U_NAME" 2> /dev/null
-        if [ "$U_PROXY_MODE" = "2" ]; then
-            NftRouteDelete $(($VPN_ROUTE_TABLE_ID_START + $_i)) 2> /dev/null
-            _i=$(($_i + 1))
-        elif [ "$U_PROXY_MODE" = "3" -a "$U_T_PROXY_TYPE" = "1" ]; then
-            NftRouteDelete $(($TPROXY_ROUTE_TABLE_ID_START + $_j)) 2> /dev/null
-            _j=$(($_j + 1))
-        fi
-        ClearUserInstanceVars
+        [ -n "$_inst" ] && NftInstanceDelete "$_inst" 2> /dev/null
+    done
+
+    for _inst in $_route_vpn_fnames
+    do
+        NftRouteDelete $(($VPN_ROUTE_TABLE_ID_START + $_i)) 2> /dev/null
+        _i=$(($_i + 1))
+    done
+
+    for _inst in $_route_tproxy_fnames
+    do
+        NftRouteDelete $(($TPROXY_ROUTE_TABLE_ID_START + $_j)) 2> /dev/null
+        _j=$(($_j + 1))
     done
 }
 
@@ -662,7 +708,7 @@ AddNftRules() {
     NftAddBaseChains $_chain_prio_first $_chain_prio_local $_chain_prio_fproxy
     NftAddActionChains $_chain_prio_action
     AddUserInstancesNftRules
-    NftInstanceAdd "\" \"" $PKTS_MARK_START ${PROXY_MODE:=$INSTANCES_DEF_PROXY_MODE} ${TOR_TRANS_PORT:=$INSTANCES_DEF_TOR_TRANS_PORT} $_route_table_id "\"${IF_VPN:=$INSTANCES_DEF_IF_VPN}\"" ${T_PROXY_TYPE:=$INSTANCES_DEF_T_PROXY_TYPE} ${T_PROXY_PORT_TCP:=$INSTANCES_DEF_T_PROXY_PORT_TCP} ${T_PROXY_PORT_UDP:=$INSTANCES_DEF_T_PROXY_PORT_UDP} ${T_PROXY_ALLOW_UDP:=$INSTANCES_DEF_T_PROXY_ALLOW_UDP} ${ENABLE_BLLIST_PROXY:=$INSTANCES_DEF_ENABLE_BLLIST_PROXY} ${ENABLE_FPROXY:=$INSTANCES_DEF_ENABLE_FPROXY} "\"$VPN_GW_IP\""
+    NftInstanceAdd "\" \"" "$PKTS_MARK_START" "${PROXY_MODE:=$INSTANCES_DEF_PROXY_MODE}" "${TOR_TRANS_PORT:=$INSTANCES_DEF_TOR_TRANS_PORT}" "$_route_table_id" "\"${IF_VPN:=$INSTANCES_DEF_IF_VPN}\"" "${T_PROXY_TYPE:=$INSTANCES_DEF_T_PROXY_TYPE}" "${T_PROXY_PORT_TCP:=$INSTANCES_DEF_T_PROXY_PORT_TCP}" "${T_PROXY_PORT_UDP:=$INSTANCES_DEF_T_PROXY_PORT_UDP}" "${T_PROXY_ALLOW_UDP:=$INSTANCES_DEF_T_PROXY_ALLOW_UDP}" "${ENABLE_BLLIST_PROXY:=$INSTANCES_DEF_ENABLE_BLLIST_PROXY}" "${ENABLE_FPROXY:=$INSTANCES_DEF_ENABLE_FPROXY}" "\"$VPN_GW_IP\""
     if [ "$PROXY_LOCAL_CLIENTS" = "1" ]; then
         NftAddLocalClientsRule
     fi
@@ -714,10 +760,14 @@ GetVpnRouteStatus() {
         fi
         _i=$(($_i + 1))
     done
-    if [ "$PROXY_MODE" = "2" ] && ! NftRouteStatus $VPN_ROUTE_TABLE_ID_START; then
+    if MainInstanceNeedsVpnRouteCheck && ! NftRouteStatus $VPN_ROUTE_TABLE_ID_START; then
         _ret_val=1
     fi
     return $_ret_val
+}
+
+MainInstanceNeedsVpnRouteCheck() {
+    [ "$PROXY_MODE" = "2" ] && [ -n "$BLLIST_PRESET" -o -n "$BLLIST_MODULE" ]
 }
 
 VpnRouteDiagnosticCheck() {
@@ -767,7 +817,7 @@ VpnRouteDiagnostic() {
         _i=$(($_i + 1))
     done
 
-    if [ "$PROXY_MODE" = "2" ]; then
+    if MainInstanceNeedsVpnRouteCheck; then
         VpnRouteDiagnosticCheck "main instance" "${IF_VPN:-$INSTANCES_DEF_IF_VPN}" "$VPN_ROUTE_TABLE_ID_START" || _return_code=1
     fi
 
@@ -1087,7 +1137,7 @@ GetBlacklistFiles() {
 }
 
 MakeInstancesCache() {
-    printf "USER_INSTANCES_ALL=\"${USER_INSTANCES_ALL}\"\nUSER_INSTANCES_ALL_FNAMES=\"${USER_INSTANCES_ALL_FNAMES}\"\nUSER_INSTANCES_VPN=\"${USER_INSTANCES_VPN}\"\nUSER_INSTANCES_VPN_FNAMES=\"${USER_INSTANCES_VPN_FNAMES}\"\nUSER_INSTANCES_CFG=\"${USER_INSTANCES_CFG}\"\nUSER_INSTANCES_CFG_FNAMES=\"${USER_INSTANCES_CFG_FNAMES}\"\n" > "$INSTANCES_CACHE"
+    printf "USER_INSTANCES_ALL=\"${USER_INSTANCES_ALL}\"\nUSER_INSTANCES_ALL_FNAMES=\"${USER_INSTANCES_ALL_FNAMES}\"\nUSER_INSTANCES_VPN=\"${USER_INSTANCES_VPN}\"\nUSER_INSTANCES_VPN_FNAMES=\"${USER_INSTANCES_VPN_FNAMES}\"\nUSER_INSTANCES_TPROXY_FNAMES=\"${USER_INSTANCES_TPROXY_FNAMES}\"\nUSER_INSTANCES_CFG=\"${USER_INSTANCES_CFG}\"\nUSER_INSTANCES_CFG_FNAMES=\"${USER_INSTANCES_CFG_FNAMES}\"\n" > "$INSTANCES_CACHE"
 }
 
 DeleteInstancesCache() {
@@ -1117,11 +1167,12 @@ CheckDnsmasqConfDir() {
 Update() {
     local _arg="$1" _return_code=0 _upd_sets_ret_code=0
     MakeToken
-    if [ -e "$U_PID_FILE" ] && [ "$_arg" != "force-update" ]; then
+    if PidFileActive "$U_PID_FILE" && [ "$_arg" != "force-update" ]; then
         echo " ${NAME} ${_arg} - Error! Another instance of update is already running" >&2
         MakeLogRecord "err" "${_arg} - Error! Another instance of update is already running"
         _return_code=2
     else
+        ClearStalePidFile "$U_PID_FILE"
         ToggleUPIDFile add
         ### Pre-update script
         [ -x "$PRE_UPDATE_SCRIPT" ] && $PRE_UPDATE_SCRIPT
@@ -1149,10 +1200,11 @@ Update() {
 
 Start() {
     local _arg="$1" _return_code=1
-    if [ -e "$START_PID_FILE" ]; then
+    if PidFileActive "$START_PID_FILE"; then
         echo " ${NAME} is currently starting..." >&2
         return 1
     else
+        ClearStalePidFile "$START_PID_FILE"
         echo "$$" > "$START_PID_FILE"
     fi
     MakeToken
@@ -1209,7 +1261,7 @@ Reload() {
     local _i=0 _attempts=60
     if CheckStatus; then
         MakeToken
-        while [ -e "$START_PID_FILE" ]
+        while PidFileActive "$START_PID_FILE"
         do
             if [ $_i -ge $_attempts ]; then
                 return 1
@@ -1373,7 +1425,7 @@ case "$1" in
     ;;
     blacklist-files)
         Init
-        if [ -e "$U_PID_FILE" ] && [ "$1" != "force-update" ]; then
+        if PidFileActive "$U_PID_FILE" && [ "$1" != "force-update" ]; then
             echo " ${NAME} - Error! Another instance of update is already running" >&2
             exit 2
         else
@@ -1396,10 +1448,10 @@ case "$1" in
         return_code=$?
         case $return_code in
             0)
-                if [ -e "$START_PID_FILE" ]; then
+                if PidFileActive "$START_PID_FILE"; then
                     return_code=3
                     echo 3
-                elif [ -e "$U_PID_FILE" ]; then
+                elif PidFileActive "$U_PID_FILE"; then
                     return_code=4
                     echo 4
                 else
