@@ -15,6 +15,8 @@ Package version:
 - Fixed the AWK configuration syntax.
 - Fixed hotplug status handling.
 - Fixed unquoted numeric arguments in `NftInstanceAdd` callers so values such as `90 40` no longer shift subsequent parameters.
+- Updated nft set loading to process each available data file independently and identify the file that failed.
+- Improved VPN startup recovery by waiting for startup or update completion and recognizing logical interface names.
 
 #### Security
 
@@ -31,6 +33,8 @@ Package version:
 - Исправлен AWK-синтаксис конфигурации.
 - Исправлена обработка статусов в hotplug.
 - Исправлена передача неквотированных числовых аргументов в `NftInstanceAdd` — значения вроде `90 40` больше не сдвигают последующие параметры.
+- Исправлена загрузка nft-наборов: теперь каждый доступный файл данных обрабатывается отдельно, а ошибочный файл указывается в сообщении.
+- Улучшено восстановление VPN при запуске: служба ожидает завершения запуска или обновления и учитывает логические имена интерфейсов.
 
 #### Безопасность
 
@@ -83,6 +87,7 @@ Package version:
 - Fixed stale blacklist preset data after reopening the settings page.
 - Fixed handling of incomplete statistics responses so empty or missing data does not break the interface.
 - Fixed service status refresh after a polling error so the interface does not keep stale state.
+- Improved LuCI status polling by retrying aborted requests and preserving the current status when a poll fails.
 - Fixed cron task detection, including correct removal of its own entries and writing an empty crontab.
 - Fixed update-helper file permissions so the helpers run correctly after package installation.
 - Escaped HTML output in the dnsmasq tables on the information page.
@@ -106,6 +111,7 @@ Package version:
 - Исправлено сохранение устаревших данных blacklist-пресетов после повторного открытия страницы настроек.
 - Исправлена обработка неполных ответов статистики, чтобы пустые или отсутствующие данные не вызывали ошибку интерфейса.
 - Исправлено обновление статуса службы после ошибки опроса, чтобы интерфейс не оставался с устаревшим состоянием.
+- Улучшен опрос статуса LuCI: прерванные запросы повторяются, а текущий статус сохраняется при ошибке опроса.
 - Исправлено распознавание заданий cron, включая корректное удаление собственных записей и запись пустого crontab.
 - Исправлены права update-helper-файлов, чтобы они корректно запускались после установки пакета.
 - Экранирован HTML-вывод таблиц dnsmasq на странице информации.
