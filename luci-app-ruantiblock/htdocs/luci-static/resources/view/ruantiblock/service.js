@@ -175,28 +175,40 @@ return view.extend({
 		};
 	},
 
-	getAppStatus() {
+	getAppStatus(retry=0) {
 		return Promise.all([
 			fs.exec(tools.execPath, [ 'raw-status' ]),
 			fs.exec(tools.execPath, [ 'vpn-route-status' ]),
-			tools.getInitStatus(tools.appName),
+			tools.getInitStatus(tools.appName, false),
 			L.resolveDefault(fs.read(tools.tokenFile), 0),
 			uci.load(tools.appName),
 			L.resolveDefault(fs.read(tools.versionFile), ''),
 			L.resolveDefault(fs.exec_direct(tools.execPath, [ 'vpn-route-diagnostic' ], 'text'), ''),
 		]).catch(e => {
+			if(tools.isAbortedError(e)) {
+				if(retry < 2) {
+					return new Promise(resolve => setTimeout(resolve, 250)).then(() =>
+						this.getAppStatus(retry + 1));
+				};
+				return null;
+			};
+
 			ui.addNotification(null, E('p', _('Unable to execute or read contents')
 				+ ': %s [ %s | %s | %s ]'.format(
 					e.message, tools.execPath, 'tools.getInitStatus', 'uci.ruantiblock'
 			)));
+			return null;
 		});
 	},
 
 	setAppStatus(status_array, elems=[], force_app_code) {
 		let status_elem       = elems[0] || document.getElementById('status');
-		status_elem.innerHTML = '';
 		let section = uci.get(tools.appName, 'config');
-		if(!status_array || typeof(section) !== 'object') {
+		if(!status_array) {
+			return;
+		};
+		status_elem.innerHTML = '';
+		if(typeof(section) !== 'object') {
 			status_elem.append(tools.makeStatusString(1));
 			ui.addNotification(null, E('p', _('Unable to read the contents')
 				+ ': setAppStatus()'));
@@ -292,7 +304,9 @@ return view.extend({
 		return tools.handleServiceAction(tools.appName, action).then(() => {
 			return this.getAppStatus().then(
 				(status_array) => {
-					this.setAppStatus(status_array);
+					if(status_array) {
+						this.setAppStatus(status_array);
+					};
 				}
 			);
 		});
@@ -308,14 +322,18 @@ return view.extend({
 
 		if(action === 'update') {
 			this.getAppStatus().then(status_array => {
-				this.setAppStatus(status_array, [], 4);
+				if(status_array) {
+					this.setAppStatus(status_array, [], 4);
+				};
 			});
 		};
 
 		return fs.exec_direct(tools.execPath, [ action ]).then(res => {
 			return this.getAppStatus().then(
 				(status_array) => {
-					this.setAppStatus(status_array);
+					if(status_array) {
+						this.setAppStatus(status_array);
+					};
 				}
 			);
 		});
@@ -326,14 +344,22 @@ return view.extend({
 			v = tools.normalizeValue(v);
 			if(v != this.statusTokenValue) {
 				this.getAppStatus().then(
-					L.bind(this.setAppStatus, this)
+					status_array => {
+						if(status_array) {
+							this.setAppStatus(status_array);
+						};
+					}
 				);
 			}
 			this.statusTokenValue = v;
 		}).catch(e => {
 			this.statusTokenValue = 0;
 			return this.getAppStatus().then(
-				L.bind(this.setAppStatus, this)
+				status_array => {
+					if(status_array) {
+						this.setAppStatus(status_array);
+					};
+				}
 			).catch(() => {});
 		});
 	},

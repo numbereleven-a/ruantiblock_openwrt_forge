@@ -93,16 +93,26 @@ return baseclass.extend({
 		expect: { result: false }
 	}),
 
-	getInitStatus(name) {
+	isAbortedError(error) {
+		let message = String(error && error.message || error);
+		return /XHR request aborted by browser|AbortError/i.test(message);
+	},
+
+	getInitStatus(name, notify=true) {
 		return this.callInitStatus(name).then(res => {
-			if(res) {
+			if(res && res[name]) {
 				return res[name].enabled;
 			} else {
 				throw _('Command failed');
 			}
 		}).catch(e => {
-			ui.addNotification(null,
-				E('p', _('Failed to get %s init status: %s').format(name, e)));
+			if(notify && !this.isAbortedError(e)) {
+				ui.addNotification(null,
+					E('p', _('Failed to get %s init status: %s').format(name, e)));
+			};
+			if(!notify) {
+				throw e;
+			};
 		});
 	},
 

@@ -15,6 +15,21 @@ if [ "$ACTION" = "ifup" ]; then
     ruab_route_status=$($RUAB_CMD raw-status)
     case "$ruab_route_status" in
         0) ;;
+        1|2) exit 0 ;;
+        3|4)
+            _wait=0
+            while [ $_wait -lt 30 ]
+            do
+                sleep 1
+                ruab_route_status=$($RUAB_CMD raw-status)
+                case "$ruab_route_status" in
+                    0) break ;;
+                    1|2) exit 0 ;;
+                esac
+                _wait=$(($_wait + 1))
+            done
+            [ "$ruab_route_status" = "0" ] || exit 0
+        ;;
         *) exit 0 ;;
     esac
 
@@ -45,14 +60,14 @@ if [ "$ACTION" = "ifup" ]; then
         IF_VPN_CURRENT=$($UCI_CMD get ruantiblock.config.if_vpn)
     fi
 
-    if [ "$DEVICE" != "$IF_VPN_CURRENT" ]; then
+    if [ "$DEVICE" != "$IF_VPN_CURRENT" -a "$INTERFACE" != "$IF_VPN_CURRENT" ]; then
 
         . "$USER_INSTANCES_COMMON"
 
         for inst in $(GetUserInstances 2)
         do
             IncludeUserInstanceVars "$inst"
-            if [ "$DEVICE" = "$U_IF_VPN" ]; then
+            if [ "$DEVICE" = "$U_IF_VPN" -o "$INTERFACE" = "$U_IF_VPN" ]; then
                 IF_VPN_CURRENT="$U_IF_VPN"
 
                 if [ $DEBUG -ge 1 ]; then
@@ -66,7 +81,7 @@ if [ "$ACTION" = "ifup" ]; then
         done
     fi
 
-    if [ "$DEVICE" = "$IF_VPN_CURRENT" ]; then
+    if [ "$DEVICE" = "$IF_VPN_CURRENT" -o "$INTERFACE" = "$IF_VPN_CURRENT" ]; then
         if [ $DEBUG -ge 1 ]; then
             echo "  ruantiblock-vpn-iface-script: IF_VPN_CURRENT=${IF_VPN_CURRENT} ACTION=\"${ACTION}\" DEVICE=${DEVICE} INTERFACE=${INTERFACE}" >&2
             logger -p "user.debug" -t "ruantiblock-hotplug-script" "IF_VPN_CURRENT=${IF_VPN_CURRENT} ACTION=\"${ACTION}\" DEVICE=${DEVICE} INTERFACE=${INTERFACE}"

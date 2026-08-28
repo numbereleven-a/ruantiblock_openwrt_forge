@@ -603,24 +603,28 @@ UpdateBllistProxySet() {
 }
 
 UpdateBllistSets() {
-    local _return_code=0
-    if [ -f "$IP_DATA_FILE" -a -f "$IP_DATA_FILE_USER_INSTANCES" -a -f "$IP_DATA_FILE_BYPASS" ]; then
-        echo " Updating nft sets..."
-        $NFT_CMD -f "$IP_DATA_FILE_BYPASS"
-        _return_code=$?
-        if [ $_return_code -eq 0 ]; then
-            $NFT_CMD -f "$IP_DATA_FILE_USER_INSTANCES"
-            _return_code=$?
-            if [ $_return_code -eq 0 ]; then
-                $NFT_CMD -f "$IP_DATA_FILE"
-                _return_code=$?
-            fi
+    local _return_code=0 _file _file_return_code _files_updated=0
+    for _file in "$IP_DATA_FILE_BYPASS" "$IP_DATA_FILE_USER_INSTANCES" "$IP_DATA_FILE"
+    do
+        [ -f "$_file" ] || continue
+        if [ $_files_updated -eq 0 ]; then
+            echo " Updating nft sets..."
         fi
+        $NFT_CMD -f "$_file"
+        _file_return_code=$?
+        _files_updated=1
+        if [ $_file_return_code -ne 0 ]; then
+            _return_code=$_file_return_code
+            echo " Error! Nft set file wasn't applied [${_file}]" >&2
+            MakeLogRecord "err" "Error! Nft set file wasn't applied [${_file}]"
+        fi
+    done
+    if [ $_files_updated -eq 1 ]; then
         if [ $_return_code -eq 0 ]; then
             echo " Ok"
         else
-            echo " Error! Nft set wasn't updated" >&2
-            MakeLogRecord "err" "Error! Nft set wasn't updated"
+            echo " Error! Nft sets weren't fully updated" >&2
+            MakeLogRecord "err" "Error! Nft sets weren't fully updated"
         fi
     fi
     return $_return_code
