@@ -427,7 +427,7 @@ DownloadNativeBlacklist() {
     else
         echo " Native blacklist configuration error (${1})" >&2
         MakeLogRecord "err" "Native blacklist configuration error (${1})"
-        exit 1
+        return 1
     fi
     if [ $_return_code -eq 0 ]; then
         mv -f "$_ip_data_file" "$IP_DATA_FILE"
@@ -463,6 +463,9 @@ FlushInstancesNftSets() {
         case "$_arg" in
             bllist)
                 FlushNftSets "${NFTSET_CIDR}${_name}" "${NFTSET_IP}${_name}" "${NFTSET_DNSMASQ}${_name}" "${NFTSET_ONION}${_name}"
+            ;;
+            dns)
+                FlushNftSets "${NFTSET_DNSMASQ}${_name}" "${NFTSET_ONION}${_name}"
             ;;
             *)
                 FlushNftSets "${NFTSET_FPROXY}${_name}" "${NFTSET_BLLIST_PROXY}${_name}" "${NFTSET_CIDR}${_name}" "${NFTSET_IP}${_name}" "${NFTSET_DNSMASQ}${_name}" "${NFTSET_ONION}${_name}"
@@ -929,6 +932,11 @@ AddBypassEntries() {
 AddUserEntries() {
     local _inst _url _return_code=0 _instance_return_code=0 _attempt=1 _instance_entries_file _ip_data_file_user_instances _dnsmasq_data_file_user_instances _user_entries_status_file _str _update_string
 
+    export USER_ENTRIES_LOCAL_ONLY=0
+    USER_ENTRIES_REMOTE_PENDING=0
+    [ "$1" = "cached" ] && USER_ENTRIES_LOCAL_ONLY=1
+    mkdir -p "${DATA_DIR}/user_remote" || return 1
+
     if [ "$ENABLE_TMP_DOWNLOADS" = "1" ]; then
         _ip_data_file_user_instances="$IP_DATA_FILE_USER_INSTANCES_TMP"
         _dnsmasq_data_file_user_instances="$DNSMASQ_DATA_FILE_USER_INSTANCES_TMP"
@@ -961,7 +969,7 @@ AddUserEntries() {
             printf "server=/onion/%s\nnftset=/onion/%s#%s\n" "$U_ONION_DNS_ADDR" "$NFT_TABLE_DNSMASQ" "${NFTSET_ONION}.${U_NAME}" >> "$_dnsmasq_data_file_user_instances"
         fi
 
-        if [ "$U_ENABLE_ENTRIES_REMOTE_PROXY" = "1" ]; then
+        if [ "$U_ENABLE_ENTRIES_REMOTE_PROXY" = "1" -a "$USER_ENTRIES_LOCAL_ONLY" != "1" ]; then
             for _url in $U_ENTRIES_REMOTE
             do
                 UpdateBllistProxySet "$U_NAME" "$_url"
@@ -978,9 +986,22 @@ AddUserEntries() {
         export I_DNSMASQ_DATA_FILE="$_dnsmasq_data_file_user_instances"
         export I_USER_ENTRIES_STATUS_FILE="$_user_entries_status_file"
         export I_INSTANCE_ENTRIES_FILE="$_instance_entries_file"
+        export I_REMOTE_CACHE_FILE="${DATA_DIR}/user_remote/${_inst}"
 
         $USER_ENTRIES_PARSER
         _instance_return_code=$?
+
+        if [ "$USER_ENTRIES_LOCAL_ONLY" = "1" -a $_instance_return_code -eq 3 ]; then
+            USER_ENTRIES_REMOTE_PENDING=1
+            _instance_return_code=0
+        elif [ "$USER_ENTRIES_LOCAL_ONLY" != "1" ]; then
+            if [ $_instance_return_code -eq 0 -a -f "${I_REMOTE_CACHE_FILE}.tmp" ]; then
+                mv -f "${I_REMOTE_CACHE_FILE}.tmp" "$I_REMOTE_CACHE_FILE"
+            else
+                rm -f "${I_REMOTE_CACHE_FILE}.tmp"
+            fi
+        fi
+        unset I_REMOTE_CACHE_FILE
 
         unset I_NFTSET_CIDR_STRING
         unset I_NFTSET_IP_STRING
@@ -990,7 +1011,7 @@ AddUserEntries() {
         unset I_USER_ENTRIES_STATUS_FILE
         unset I_INSTANCE_ENTRIES_FILE
 
-        if [ "$U_ENABLE_ENTRIES_REMOTE_PROXY" = "1" ]; then
+        if [ "$U_ENABLE_ENTRIES_REMOTE_PROXY" = "1" -a "$USER_ENTRIES_LOCAL_ONLY" != "1" ]; then
             FlushNftSets "${NFTSET_BLLIST_PROXY}.${U_NAME}"
         fi
 
@@ -1034,6 +1055,7 @@ AddUserEntries() {
         done < "$USER_ENTRIES_STATUS_FILE"
     fi
 
+    unset USER_ENTRIES_LOCAL_ONLY
     return $_return_code
 }
 
@@ -1187,9 +1209,14 @@ Update() {
         fi
         GetBlacklistFiles
         _return_code=$?
-        FlushInstancesNftSets bllist
         UpdateBllistSets
         _upd_sets_ret_code=$?
+        # IP data files replace their sets in an nft transaction. Clear only
+        # resolved DNS entries after a successful load, keeping old IP sets
+        # intact when a replacement file cannot be applied.
+        if [ $_return_code -eq 0 -a $_upd_sets_ret_code -eq 0 ]; then
+            FlushInstancesNftSets dns
+        fi
         if [ $_return_code -eq 0 ]; then
             _return_code=$_upd_sets_ret_code
         fi
@@ -1224,7 +1251,7 @@ Start() {
         PreStartCheck
         # Rebuild local user-entry files so disabled/removed instances cannot
         # leave stale dnsmasq directives or nft data behind after a restart.
-        AddUserEntries
+        AddUserEntries cached
         UpdateBllistSets
         _return_code=$?
         RestartDnsmasq
@@ -1237,6 +1264,9 @@ Start() {
     fi
     rm -f "$START_PID_FILE"
     MakeToken
+    if [ $_return_code -eq 0 -a "$USER_ENTRIES_REMOTE_PENDING" = "1" -a "$RUAB_DEFER_REMOTE_UPDATE" != "1" ]; then
+        "$APP_EXEC" update </dev/null >/dev/null 2>&1 &
+    fi
     return $_return_code
 }
 
@@ -1374,17 +1404,8 @@ case "$1" in
     ;;
     restart|delayed-restart)
         if [ "$1" = "delayed-restart" -a -n "$2" ]; then
-            {
-                echo "$$" > "$START_PID_FILE"
-                sleep $2 &> /dev/null
-                rm -f "$START_PID_FILE"
-                Init
-                Stop "stop"
-                Start "start"
-                return_code=$?
-                StatusOutput
-                exit $return_code;
-            } &> /dev/null &
+            case "$2" in *[!0-9]*) exit 1 ;; esac
+            "$APP_EXEC" delayed-start "$2" </dev/null >/dev/null 2>&1 &
             return_code=0
         else
             Init
@@ -1393,6 +1414,17 @@ case "$1" in
             return_code=$?
             StatusOutput
         fi
+    ;;
+    delayed-start)
+        case "$2" in ''|*[!0-9]*) exit 1 ;; esac
+        echo "$$" > "$START_PID_FILE"
+        sleep "$2"
+        rm -f "$START_PID_FILE"
+        Init
+        Stop "stop"
+        Start "start"
+        return_code=$?
+        StatusOutput
     ;;
     reload)
         Init

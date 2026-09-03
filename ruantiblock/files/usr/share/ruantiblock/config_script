@@ -8,7 +8,7 @@ if [ $? -ne 0 ]; then
 fi
 AWK_CMD="awk"
 
-eval $($UCI_CMD show "$UCI_SECTION" | $AWK_CMD -v UCI_VARS="$UCI_VARS" '
+eval "$($UCI_CMD show "$UCI_SECTION" | $AWK_CMD -v UCI_VARS="$UCI_VARS" '
         BEGIN {
             split(UCI_VARS, split_array, " ");
             for(i in split_array)
@@ -28,7 +28,7 @@ eval $($UCI_CMD show "$UCI_SECTION" | $AWK_CMD -v UCI_VARS="$UCI_VARS" '
                 print toupper(name) "=\"" val "\"";
                 delete vars_array[name];
             };
-        }')
+        }')"
 
 _uci_user_instances_max=$($UCI_CMD -q get "${UCI_SECTION}.user_instances_max")
 case "$_uci_user_instances_max" in

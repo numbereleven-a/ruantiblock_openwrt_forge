@@ -21,11 +21,17 @@ echo | $AWK_CMD -v WGET_CMD="$WGET_CMD" -v WGET_PARAMS="$WGET_PARAMS" \
         DNSMASQ_DATA_FILE = ENVIRON["I_DNSMASQ_DATA_FILE"];
         USER_ENTRIES_STATUS_FILE = ENVIRON["I_USER_ENTRIES_STATUS_FILE"];
         INSTANCE_ENTRIES_FILE = ENVIRON["I_INSTANCE_ENTRIES_FILE"];
+        LOCAL_ONLY = ENVIRON["USER_ENTRIES_LOCAL_ONLY"];
+        REMOTE_CACHE_FILE = ENVIRON["I_REMOTE_CACHE_FILE"];
         exit_code = 0;
 
         gsub("\042", "%22", U_ENTRIES_REMOTE);
         gsub("\047", "%27", U_ENTRIES_REMOTE);
         split(U_ENTRIES_REMOTE, urls, /[\040\011\012]+/);
+        cache_key = U_ENTRIES_REMOTE;
+        gsub(/[\040\011\012]+/, " ", cache_key);
+        sub(/^ /, "", cache_key);
+        sub(/ $/, "", cache_key);
 
         delete ip_array;
         delete cidr_array;
@@ -60,19 +66,33 @@ echo | $AWK_CMD -v WGET_CMD="$WGET_CMD" -v WGET_PARAMS="$WGET_PARAMS" \
     };
     function trimEntry(str) {
         sub("\015", "", str);
-        return str;
+        return tolower(str);
     };
-    function checkEntry(str) {
+    function validIpv4(str,  parts, count, j) {
+        if(str !~ /^[0-9]{1,3}([.][0-9]{1,3}){3}$/) return 0;
+        count = split(str, parts, /[.]/);
+        for(j = 1; j <= count; j++) {
+            if(parts[j] + 0 > 255) return 0;
+        };
+        return 1;
+    };
+    function checkEntry(str,  parts, dns) {
         if (str ~ /^([\040\011]*$|#)/) {
             return 0;
         }
         else if(str ~ /^[0-9]{1,3}([.][0-9]{1,3}){3}$/) {
-            return 2;
+            return validIpv4(str) ? 2 : 0;
         }
         else if(str ~ /^[0-9]{1,3}([.][0-9]{1,3}){3}[\057][0-9]{1,2}$/) {
-            return 1;
+            split(str, parts, /\057/);
+            return (validIpv4(parts[1]) && parts[2] + 0 <= 32) ? 1 : 0;
         }
         else if(str ~ /^([a-z0-9._-]+[.])*([a-z]{2,}|xn--[a-z0-9]+)([ ][0-9]{1,3}([.][0-9]{1,3}){3}([#][0-9]{2,5})?)?$/) {
+            split(str, parts, / /);
+            if(length(parts[2]) > 0) {
+                split(parts[2], dns, /#/);
+                if(!validIpv4(dns[1]) || (length(dns[2]) > 0 && dns[2] + 0 > 65535)) return 0;
+            };
             return 3;
         };
     };
@@ -163,12 +183,15 @@ echo | $AWK_CMD -v WGET_CMD="$WGET_CMD" -v WGET_PARAMS="$WGET_PARAMS" \
         if(_ret_code == 0 && (length(_cidr_array) > 0 || length(_ip_array) > 0 || length(_fqdn_array) > 0)) {
             for(i in _cidr_array) {
                 cidr_array[i];
+                if(length(REMOTE_CACHE_FILE) > 0) print i >> (REMOTE_CACHE_FILE ".tmp");
             };
             for(i in _ip_array) {
                 ip_array[i];
+                if(length(REMOTE_CACHE_FILE) > 0) print i >> (REMOTE_CACHE_FILE ".tmp");
             };
             for(i in _fqdn_array) {
                 fqdn_array[i];
+                if(length(REMOTE_CACHE_FILE) > 0) print i >> (REMOTE_CACHE_FILE ".tmp");
             };
         };
 
@@ -180,15 +203,34 @@ echo | $AWK_CMD -v WGET_CMD="$WGET_CMD" -v WGET_PARAMS="$WGET_PARAMS" \
     END {
         readFile(INSTANCE_ENTRIES_FILE, "local");
         dl_ret_code = 1;
-        for(i in urls) {
-            url = urls[i];
-            dl_ret_code = downloadFile(url);
-            if(dl_ret_code != 0) {
-                exit_code = dl_ret_code;
-                if(ENABLE_TMP_DOWNLOADS == 1) {
-                    break;
+        if(LOCAL_ONLY == 1) {
+            if(length(cache_key) > 0) {
+                cached_key = "";
+                if(length(REMOTE_CACHE_FILE) > 0) {
+                    getline cached_key < REMOTE_CACHE_FILE;
+                    close(REMOTE_CACHE_FILE);
+                };
+                if(cached_key == "# " cache_key) {
+                    readFile(REMOTE_CACHE_FILE, "cache");
+                } else {
+                    remote_pending = 1;
                 };
             };
+        } else {
+            if(length(REMOTE_CACHE_FILE) > 0 && length(cache_key) > 0) {
+                print "# " cache_key > (REMOTE_CACHE_FILE ".tmp");
+            };
+            for(i in urls) {
+                url = urls[i];
+                dl_ret_code = downloadFile(url);
+                if(dl_ret_code != 0) {
+                    exit_code = dl_ret_code;
+                    if(ENABLE_TMP_DOWNLOADS == 1) {
+                        break;
+                    };
+                };
+            };
+            if(length(REMOTE_CACHE_FILE) > 0) close(REMOTE_CACHE_FILE ".tmp");
         };
         if(ENABLE_TMP_DOWNLOADS != 1 || (ENABLE_TMP_DOWNLOADS == 1 && exit_code == 0)) {
             if(length(cidr_array) > 0 || length(ip_array) > 0) {
@@ -207,7 +249,7 @@ echo | $AWK_CMD -v WGET_CMD="$WGET_CMD" -v WGET_PARAMS="$WGET_PARAMS" \
                 print download_results[i] >> USER_ENTRIES_STATUS_FILE;
             };
         };
-        exit exit_code;
+        exit (remote_pending ? 3 : exit_code);
     }'
 
 exit $?

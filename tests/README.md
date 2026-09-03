@@ -1,0 +1,14 @@
+# Regression checks
+
+Run the shell checks with Bash and an AWK implementation supporting interval expressions:
+
+```sh
+bash tests/runtime-regression.sh "$PWD/ruantiblock/files" "$(mktemp -d)" 0
+node tests/cron-regression.cjs luci-app-ruantiblock/htdocs/luci-static/resources/view/ruantiblock/cron.js
+```
+
+The shell script takes a package filesystem root, a fresh writable fixture directory, and an optional `1` to enable kernel nftables checks. For installed OpenWrt files, the filesystem root is `/` and the script runs with BusyBox ash. Kernel checks require root and create only the `inet rb_review_217` test table, without hook chains; an existing table with that name causes the test to stop. The test table is removed on exit. Fixture files remain available for inspection.
+
+Runtime checks exercise the package functions with synthetic list entries and substituted external services. They cover cached startup, failed downloads, input parsing, delayed restart, UCI whitespace, hotplug defaults, and update failures. With kernel checks enabled, both valid-list loading and preservation of existing IP entries after a rejected transaction are checked.
+
+The cron checks execute the supplied LuCI module in Node.js with DOM and filesystem substitutes. They cover missing files, permission and timeout failures, blocked writes after failed reads, preservation of unrelated jobs, and failed writes without restarting cron. These checks do not replace an end-to-end browser test.

@@ -24,7 +24,7 @@ NftCmdWrapper() {
     local _i=0 _attempts=10 _return_code=1
     while [ $_i -lt $_attempts ]
     do
-        if $*; then
+        if "$@"; then
             _return_code=$?
             break
         fi

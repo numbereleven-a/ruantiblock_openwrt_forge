@@ -6,6 +6,7 @@
 
 return view.extend({
 	currentCrontabLines: [],
+	crontabReadFailed: false,
 
 	isRuantiblockTask(line) {
 		let fields = String(line || '').trim().split(/\s+/);
@@ -33,6 +34,9 @@ return view.extend({
 	},
 
 	writeCronFile() {
+		if(this.crontabReadFailed)
+			return Promise.resolve(false);
+
 		let crontab_string = this.currentCrontabLines.length ?
 			this.currentCrontabLines.join('\n') + '\n' : '';
 
@@ -61,11 +65,15 @@ return view.extend({
 	},
 
 	delCronSchedule(ev) {
+		if(this.crontabReadFailed)
+			return Promise.resolve(false);
 		this.delRuabSchedules();
 		return this.writeCronFile();
 	},
 
 	setCronSchedule(ev) {
+		if(this.crontabReadFailed)
+			return Promise.resolve(false);
 		let hour_interval = document.getElementById('cron_hour_interval').value;
 		let day_interval  = document.getElementById('cron_day_interval').value;
 		let hour          = document.getElementById('cron_hour').value;
@@ -108,15 +116,24 @@ return view.extend({
 	},
 
 	load() {
+		this.crontabReadFailed = false;
 		return fs.lines(tools.crontabFile).catch(e => {
+			if(e.name === 'NotFoundError')
+				return [];
+			this.crontabReadFailed = true;
 			ui.addNotification(null, E('p', _('Unable to read the contents')
 				+ ': %s [ %s ]'.format(
 					e.message, tools.crontabFile
 			)));
+			return [];
 		});
 	},
 
 	render(content) {
+		if(!Array.isArray(content)) {
+			this.crontabReadFailed = true;
+			content = [];
+		};
 		this.currentCrontabLines = content;
 		let current_task = this.stringifyRuabTasks(content);
 
@@ -134,6 +151,7 @@ return view.extend({
 			'class': 'cbi-button btn cbi-button-reset',
 			'id'   : 'btn_cron_del',
 			'name' : 'btn_cron_del',
+			'disabled': this.crontabReadFailed,
 		}, _('Reset'));
 		btn_cron_del.onclick          = ui.createHandlerFn(this, this.delCronSchedule);
 		btn_cron_del.style.visibility = (current_task) ? 'visible' : 'hidden';
@@ -235,6 +253,7 @@ return view.extend({
 						'class': 'btn cbi-button-save',
 						'id'   : 'btn_cron_add',
 						'name' : 'btn_cron_add',
+						'disabled': this.crontabReadFailed,
 						'click': ui.createHandlerFn(this, this.setCronSchedule),
 					}, _('Set'))
 				),

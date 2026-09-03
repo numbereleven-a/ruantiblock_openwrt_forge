@@ -27,7 +27,7 @@ IncludeUserInstanceVars() {
     local _inst="$1"
     local _uci_section="${NAME}.${_inst}"
     U_NAME="$_inst"
-    eval $($UCI_CMD show "$_uci_section" | $AWK_CMD -v UCI_VARS="$UCI_VARS" '
+    eval "$($UCI_CMD show "$_uci_section" | $AWK_CMD -v UCI_VARS="$UCI_VARS" '
         BEGIN {
             split(UCI_VARS, split_array, " ");
             for(i in split_array)
@@ -47,7 +47,7 @@ IncludeUserInstanceVars() {
                 print toupper(name) "=\"" val "\"";
                 delete vars_array[name];
             };
-        }')
+        }')"
 
     if [ $DEBUG -ge 2 ]; then
         echo "  user_instances_config_script.IncludeUserInstanceVars: _inst=${_inst} U_NAME=${U_NAME} U_PROXY_MODE=${U_PROXY_MODE}" >&2

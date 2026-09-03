@@ -18,12 +18,12 @@ jobs:
             format: ipk
             sdk_file: openwrt-sdk-24.10.8-x86-64_gcc-13.3.0_musl.Linux-x86_64.tar.zst
             sdk_sha256: ac4a0405d2eea821b06f93c14ba13ffa90ad0457648903df7dde02570027ab21
-            archive: ruantiblock-2.1.16-r1-openwrt-23.05-24.10-ipk.zip
+            archive: ruantiblock-2.1.17-r1-openwrt-23.05-24.10-ipk.zip
           - openwrt: 25.12.5
             format: apk
             sdk_file: openwrt-sdk-25.12.5-x86-64_gcc-14.3.0_musl.Linux-x86_64.tar.zst
             sdk_sha256: 0c8df0151a1e88feb7c03d694d61f6a18d51872815b7c811d76e2b77504d5e9c
-            archive: ruantiblock-2.1.16-r1-openwrt-25.12-apk.zip
+            archive: ruantiblock-2.1.17-r1-openwrt-25.12-apk.zip
 
     steps:
       - name: Check out repository

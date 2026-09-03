@@ -55,7 +55,9 @@ start() {
 	else
 		exit 1
 	fi
-	$APP_EXEC start
+	# When a full startup update is requested, it also fetches missing remote
+	# user entries; do not launch a second update from Start().
+	RUAB_DEFER_REMOTE_UPDATE="$_update_at_startup" $APP_EXEC start
 	if [ $? -eq 0 -a "$_update_at_startup" = "1" ]; then
 		$APP_EXEC update > /dev/null &
 	fi

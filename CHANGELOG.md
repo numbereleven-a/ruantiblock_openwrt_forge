@@ -1,5 +1,41 @@
 # Changelog / История изменений
 
+## 2.1.17-r1 core and LuCI packages
+
+Package versions: `ruantiblock` and `luci-app-ruantiblock` — `2.1.17-r1`.
+
+### English
+
+#### Fixed
+
+- Rejected invalid IPv4 octets and CIDR prefixes in user lists, preventing malformed entries from breaking the shared nft data file.
+- Normalized uppercase domain names in user lists instead of silently skipping them.
+- Removed synchronous remote-list downloads from startup: cached entries are reused, and missing remote data is fetched in the background without duplicating the configured startup update.
+- Preserved cached remote entries and active data after a failed safe update, while applying local-list changes during restart.
+- Removed the unconditional IP-set flush before loading replacement data, preserving old IP sets when loading fails unless pre-update clearing is explicitly enabled.
+- Fixed the PID recorded for delayed restart so status checks detect the running background process.
+- Preserved repeated spaces and tabs when importing main and user-list UCI settings.
+- Preserved argument boundaries when executing nft commands.
+- Returned control to the caller after an incomplete native-blacklist download configuration, allowing normal cleanup to finish.
+- Restored the hotplug default when the VPN route-check option is absent from UCI.
+- Fixed the cron page after read errors, allowed a missing crontab, and blocked changes when an existing crontab could not be read.
+
+### Русский
+
+#### Исправлено
+
+- Добавлена проверка октетов IPv4 и длины CIDR-префикса в пользовательских списках, чтобы неверная запись не ломала общий файл данных nft.
+- Домены с заглавными буквами приводятся к нижнему регистру вместо молчаливого пропуска.
+- Убрано ожидание загрузки удалённых списков при старте: используются сохранённые записи, а недостающие данные загружаются в фоне без дублирования настроенного обновления при запуске.
+- Сохранены ранее загруженные удалённые записи и рабочие данные при неудачном безопасном обновлении, при этом изменения локальных списков применяются при перезапуске.
+- Убрана безусловная очистка IP-наборов перед загрузкой новых данных, чтобы при ошибке сохранялись старые IP, если предварительная очистка явно не включена в настройках.
+- Исправлен PID отложенного перезапуска, чтобы проверка статуса видела работающий фоновый процесс.
+- Сохранены повторяющиеся пробелы и табуляция при чтении основных настроек и настроек пользовательских списков из UCI.
+- Исправлена передача аргументов с пробелами в команды nft.
+- Исправлён выход при неполной конфигурации загрузки основного списка, чтобы вызывающий код мог завершить очистку.
+- Восстановлено значение по умолчанию в hotplug при отсутствии настройки проверки VPN-маршрутов в UCI.
+- Исправлена страница cron при ошибках чтения: отсутствие файла допускается, а изменение недоступного для чтения расписания блокируется.
+
 ## 2.1.16-r1 core package
 
 Package version:
