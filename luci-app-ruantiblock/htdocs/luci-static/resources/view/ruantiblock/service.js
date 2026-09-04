@@ -309,6 +309,9 @@ return view.extend({
 					};
 				}
 			);
+		}).finally(() => {
+			this.statusTokenValue = null;
+			poll.start();
 		});
 	},
 
@@ -336,6 +339,9 @@ return view.extend({
 					};
 				}
 			);
+		}).finally(() => {
+			this.statusTokenValue = null;
+			poll.start();
 		});
 	},
 
@@ -343,15 +349,15 @@ return view.extend({
 		return fs.read(tools.tokenFile).then(v => {
 			v = tools.normalizeValue(v);
 			if(v != this.statusTokenValue) {
-				this.getAppStatus().then(
+				return this.getAppStatus().then(
 					status_array => {
 						if(status_array) {
 							this.setAppStatus(status_array);
+							this.statusTokenValue = v;
 						};
 					}
 				);
 			}
-			this.statusTokenValue = v;
 		}).catch(e => {
 			this.statusTokenValue = 0;
 			return this.getAppStatus().then(
@@ -375,7 +381,7 @@ return view.extend({
 
 		let section           = uci.get(tools.appName, 'config');
 		this.statusTokenValue = (Array.isArray(status_array)) ?
-			tools.normalizeValue(status_array[4]) : null;
+			tools.normalizeValue(status_array[3]) : null;
 		let app_version       = tools.normalizeValue(status_array[5]);
 		let app_title         = _('Ruantiblock') +
 			((app_version) ? ` v${app_version}` : '');

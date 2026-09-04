@@ -236,10 +236,19 @@ return baseclass.extend({
 			this.description = description;
 			this.callback    = callback;
 			this.file_exists = file_exists;
+			this.readFailed  = true;
 		},
 
 		load() {
-			return L.resolveDefault(fs.read(this.file), '');
+			this.readFailed = true;
+			return fs.read(this.file).catch(e => {
+				if(!this.file_exists && e.name === 'NotFoundError')
+					return '';
+				throw e;
+			}).then(content => {
+				this.readFailed = false;
+				return content;
+			});
 		},
 
 		render(content) {
@@ -276,6 +285,9 @@ return baseclass.extend({
 		},
 
 		handleSave(ev) {
+			if(this.readFailed)
+				return Promise.reject(new Error(_('Unable to read the contents')));
+
 			let textarea = document.getElementById('widget.modal_content');
 			let value    = textarea.value.trim().replace(/\r\n/g, '\n') + '\n';
 
@@ -286,11 +298,11 @@ return baseclass.extend({
 				if(this.callback) {
 					return this.callback(rc);
 				};
+			}).then(() => {
+				ui.hideModal();
 			}).catch(e => {
 				ui.addNotification(null, E('p', _('Unable to save the contents')
 					+ ': %s'.format(e.message)));
-			}).finally(() => {
-				ui.hideModal();
 			});
 		},
 

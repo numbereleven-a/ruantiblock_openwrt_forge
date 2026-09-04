@@ -5,7 +5,7 @@ APP_EXEC="/usr/bin/ruantiblock"
 
 . "$USER_INSTANCES_COMMON"
 
-VPN_IFACES_STATUS=1
+VPN_ROUTE_RECOVERY_NEEDED=0
 
 CheckIfaceStatus() {
     local _iface="$1" _ret_val=0
@@ -29,25 +29,25 @@ VpnRouteInstanceStatus() {
 
 GetVpnRouteStatus() {
     local _inst _i=1 _ret_val=0
+    VPN_ROUTE_RECOVERY_NEEDED=0
     for _inst in $USER_INSTANCES_VPN_FNAMES
     do
         IncludeUserInstanceVars "$_inst"
-        if ! CheckIfaceStatus $U_IF_VPN; then
-            VPN_IFACES_STATUS=0
-        fi
         if ! VpnRouteInstanceStatus $(($VPN_ROUTE_TABLE_ID_START + $_i)); then
             _ret_val=1
-            break
+            if CheckIfaceStatus "${U_IF_VPN:-$INSTANCES_DEF_IF_VPN}"; then
+                VPN_ROUTE_RECOVERY_NEEDED=1
+            fi
         fi
         _i=$(($_i + 1))
         ClearUserInstanceVars
     done
-    if [ $_ret_val -eq 0 -a "$PROXY_MODE" = "2" ]; then
-        if ! CheckIfaceStatus $IF_VPN; then
-            VPN_IFACES_STATUS=0
-        fi
+    if MainInstanceNeedsVpnRouteCheck; then
         if ! VpnRouteInstanceStatus $VPN_ROUTE_TABLE_ID_START; then
             _ret_val=1
+            if CheckIfaceStatus "$IF_VPN"; then
+                VPN_ROUTE_RECOVERY_NEEDED=1
+            fi
         fi
     fi
     return $_ret_val
@@ -56,9 +56,9 @@ GetVpnRouteStatus() {
 Main() {
     while [ -e "$PID_FILE" ]
     do
-        VPN_IFACES_STATUS=1
         if ! GetVpnRouteStatus; then
-            if [ "$VPN_IFACES_STATUS" = "1" ]; then
+            # One disconnected tunnel must not block recovery of other VPNs.
+            if [ "$VPN_ROUTE_RECOVERY_NEEDED" = "1" ]; then
 
                 if [ $DEBUG -ge 1 ]; then
                     echo "  ruab_route_check.Main: ${APP_EXEC} reload" >&2

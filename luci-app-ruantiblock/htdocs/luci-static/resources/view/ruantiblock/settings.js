@@ -104,6 +104,7 @@ return view.extend({
 			this.description = description;
 			this.callback    = callback;
 			this.content     = '';
+			this.readFailed  = true;
 		},
 
 		cfgvalue(section_id, option) {
@@ -120,6 +121,9 @@ return view.extend({
 		},
 
 		write(section_id, formvalue) {
+			if(this.readFailed)
+				return Promise.reject(new Error(_('Unable to read the contents')));
+
 			return fs.write(this.file, formvalue).then(rc => {
 				ui.addNotification(null, E('p', _('Contents have been saved.')),
 					'info');
@@ -129,12 +133,19 @@ return view.extend({
 			}).catch(e => {
 				ui.addNotification(null, E('p', _('Unable to save the contents')
 					+ ': %s'.format(e.message)));
+				throw e;
 			});
 		},
 
 		load() {
-			return L.resolveDefault(fs.read(this.file), '').then(c => {
+			this.readFailed = true;
+			return fs.read(this.file).catch(e => {
+				if(e.name === 'NotFoundError')
+					return '';
+				throw e;
+			}).then(c => {
 				this.content = c;
+				this.readFailed = false;
 			});
 		},
 

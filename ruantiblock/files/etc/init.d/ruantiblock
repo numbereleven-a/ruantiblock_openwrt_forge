@@ -18,17 +18,18 @@ get_dnsmasq_confdir() {
 		do
 			_first_instance_dir=$(ubus call service list | jsonfilter -e "VAR=$.dnsmasq.instances.*.mount" | awk -v CUR_DIR="$_current_dir" '
 				BEGIN {
-					RS = " ";
+					RS = "[[:space:]]+";
 				}
 				{
 					sub("VAR=", "", $0);
 					gsub(/[\047,\073,\\]/, "", $0);
-					if($0 ~ /^\/tmp\/dnsmasq\./ && !($0 in a)) {
-						a[length(a)] = $0;
+					if($0 ~ /^\/tmp\/dnsmasq\./ && !($0 in dirs)) {
+						dirs[$0] = 1;
+						if(length(first_dir) == 0) first_dir = $0;
 					};
 				}
 				END {
-					print (CUR_DIR in a) ? CUR_DIR : a[0];
+					print (CUR_DIR in dirs) ? CUR_DIR : first_dir;
 				}')
 			if [ -n "$_first_instance_dir" ]; then
 				printf '%s' "$_first_instance_dir"
