@@ -706,6 +706,21 @@ return view.extend({
 		o.default   = tools.defaultConfig.proxy_mode;
 		o.modalonly = true;
 
+		o = ss.taboption('u_main_tab', form.ListValue, 'u_client_filter',
+			_('Apply list to'));
+		o.value('0', _('All devices'));
+		o.value('1', _('Only listed IPv4 addresses'));
+		o.default = '0';
+		o.rmempty = false;
+		o.modalonly = true;
+
+		o = ss.taboption('u_main_tab', form.DynamicList, 'u_client_ips',
+			_('Device IPv4 addresses'));
+		o.description = _('Only these devices use this list. An empty list matches no devices. Other routing rules still apply.');
+		o.datatype = 'ip4addr("nomask")';
+		o.depends('u_client_filter', '1');
+		o.modalonly = true;
+
 		// U_ENABLE_FPROXY
 		o = ss.taboption('u_main_tab', form.Flag, 'u_enable_fproxy',
 			_('Enable full proxy mode'));

@@ -145,8 +145,21 @@ NftDeleteActionChains() {
     $NFT_CMD delete chain $NFT_TABLE "$NFT_ACTION_NAT_LOCAL_CHAIN"
 }
 
+# Source matching is attached to each rule, so a nonmatching client can
+# continue to a later list with the same destination.
+NftInstanceMatchRule() {
+    local _filter="$1" _suffix="$2" _chain="$3"
+    shift 3
+    if [ "$_filter" = "1" ]; then
+        NftCmdWrapper $NFT_CMD add rule $NFT_TABLE "$_chain" ip saddr "@clients${_suffix}" "$@"
+    else
+        NftCmdWrapper $NFT_CMD add rule $NFT_TABLE "$_chain" "$@"
+    fi
+}
+
 NftInstanceAdd() {
     local _inst _first_chain_type _t_proxy_statement _chain_action_type _set
+    local _client_filter="${14:-0}"
     local _name="$1" _pkts_mark="$2" _proxy_mode="$3" _tor_trans_port="$4" _route_table_id="$5" _if_vpn="$6" _t_proxy_type="$7" _t_proxy_port_tcp="$8" _t_proxy_port_udp="$9" _t_proxy_allow_udp="${10}" _enable_bllist_proxy="${11}" _enable_fproxy="${12}" _vpn_gw_ip="${13}"
     _name="${_name#\"}"; _name="${_name%\"}"
     _if_vpn="${_if_vpn#\"}"; _if_vpn="${_if_vpn%\"}"
@@ -196,17 +209,17 @@ NftInstanceAdd() {
 
     NftCmdWrapper $NFT_CMD add rule $NFT_TABLE "${NFT_MARK_CHAIN}${_name}" mark set $_pkts_mark
     if [ "$_proxy_mode" != "2" -a "$_proxy_mode" != "3" ]; then
-        NftCmdWrapper $NFT_CMD add rule $NFT_TABLE "$NFT_BLLIST_CHAIN" ip daddr "@${NFTSET_ONION}${_name}" counter goto "${NFT_MARK_CHAIN}${_name}" comment \""$_inst"\"
+        NftInstanceMatchRule "$_client_filter" "$_name" "$NFT_BLLIST_CHAIN" ip daddr "@${NFTSET_ONION}${_name}" counter goto "${NFT_MARK_CHAIN}${_name}" comment \""$_inst"\"
     fi
     if [ "$_enable_fproxy" = "1" ]; then
-        NftCmdWrapper $NFT_CMD add rule $NFT_TABLE "$NFT_FPROXY_CHAIN" ip saddr "@${NFTSET_FPROXY}${_name}" counter goto "${NFT_MARK_CHAIN}${_name}" comment \""$_inst"\"
+        NftInstanceMatchRule "$_client_filter" "$_name" "$NFT_FPROXY_CHAIN" ip saddr "@${NFTSET_FPROXY}${_name}" counter goto "${NFT_MARK_CHAIN}${_name}" comment \""$_inst"\"
     fi
 
     for _set in "${NFTSET_CIDR}${_name}" "${NFTSET_IP}${_name}"
     do
-        NftCmdWrapper $NFT_CMD add rule $NFT_TABLE "$NFT_BLLIST_CHAIN" ip daddr "@${_set}" counter goto "${NFT_MARK_CHAIN}${_name}" comment \""$_inst"\"
+        NftInstanceMatchRule "$_client_filter" "$_name" "$NFT_BLLIST_CHAIN" ip daddr "@${_set}" counter goto "${NFT_MARK_CHAIN}${_name}" comment \""$_inst"\"
     done
-    NftCmdWrapper $NFT_CMD add rule $NFT_TABLE "$NFT_BLLIST_CHAIN" ip daddr "@${NFTSET_DNSMASQ}${_name}" counter goto "$_nft_dnsmasq_rule_target" comment \""$_inst"\"
+    NftInstanceMatchRule "$_client_filter" "$_name" "$NFT_BLLIST_CHAIN" ip daddr "@${NFTSET_DNSMASQ}${_name}" counter goto "$_nft_dnsmasq_rule_target" comment \""$_inst"\"
 
     if [ "$_proxy_mode" = "2" ]; then
         NftRouteAdd vpn $_route_table_id $_pkts_mark "$_if_vpn" "$_vpn_gw_ip"

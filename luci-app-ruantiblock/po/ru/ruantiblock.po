@@ -684,3 +684,18 @@ msgstr "Доступно обновление:"
 
 msgid "Unable to check for updates"
 msgstr "Не удалось проверить обновления"
+
+msgid "Apply list to"
+msgstr "Применять список к"
+
+msgid "All devices"
+msgstr "Всем устройствам"
+
+msgid "Only listed IPv4 addresses"
+msgstr "Только указанным IPv4-адресам"
+
+msgid "Device IPv4 addresses"
+msgstr "IPv4-адреса устройств"
+
+msgid "Only these devices use this list. An empty list matches no devices. Other routing rules still apply."
+msgstr "Этот список действует только для указанных устройств. Пустой перечень не выбирает ни одного устройства. Остальные правила маршрутизации продолжают действовать."

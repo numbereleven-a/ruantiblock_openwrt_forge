@@ -105,7 +105,7 @@ export USER_INSTANCES_DIR="${CONFIG_DIR}/user_instances"
 ### Директория списков записей пользователя
 export USER_LISTS_DIR="${CONFIG_DIR}/user_lists"
 ### Переменные экземпляров записей пользователя
-export USER_INSTANCE_VARS="U_ENABLED U_NAME U_PROXY_MODE U_TOR_TRANS_PORT U_ONION_DNS_ADDR U_IF_VPN U_VPN_GW_IP U_T_PROXY_TYPE U_T_PROXY_PORT_TCP U_T_PROXY_PORT_UDP U_T_PROXY_ALLOW_UDP U_ENTRIES_DNS U_ENTRIES_REMOTE U_ENABLE_ENTRIES_REMOTE_PROXY U_ENABLE_FPROXY U_FPROXY_LIST"
+export USER_INSTANCE_VARS="U_ENABLED U_NAME U_PROXY_MODE U_TOR_TRANS_PORT U_ONION_DNS_ADDR U_IF_VPN U_VPN_GW_IP U_T_PROXY_TYPE U_T_PROXY_PORT_TCP U_T_PROXY_PORT_UDP U_T_PROXY_ALLOW_UDP U_ENTRIES_DNS U_ENTRIES_REMOTE U_ENABLE_ENTRIES_REMOTE_PROXY U_ENABLE_FPROXY U_FPROXY_LIST U_CLIENT_FILTER U_CLIENT_IPS"
 ### Кол-во экземпляров записей пользователя (не более 50!)
 export USER_INSTANCES_MAX=10
 ### Режим списка IP адресов исключаемых из обхода блокировок (0 - выкл, 1 - вкл)
@@ -468,6 +468,7 @@ FlushInstancesNftSets() {
                 FlushNftSets "${NFTSET_DNSMASQ}${_name}" "${NFTSET_ONION}${_name}"
             ;;
             *)
+                FlushNftSets "clients${_name}"
                 FlushNftSets "${NFTSET_FPROXY}${_name}" "${NFTSET_BLLIST_PROXY}${_name}" "${NFTSET_CIDR}${_name}" "${NFTSET_IP}${_name}" "${NFTSET_DNSMASQ}${_name}" "${NFTSET_ONION}${_name}"
             ;;
         esac
@@ -484,6 +485,7 @@ DeleteInstancesNftSets() {
             _name=".${_name}"
         fi
         for _set in \
+            "clients${_name}" \
             "${NFTSET_FPROXY}${_name}" \
             "${NFTSET_BLLIST_PROXY}${_name}" \
             "${NFTSET_CIDR}${_name}" \
@@ -532,7 +534,7 @@ AddBaseNftSets() {
 }
 
 MakeInstanceNftSets() {
-    local _name="$1" _fproxy_list="$2" _fproxy_hosts
+    local _name="$1" _fproxy_list="$2" _client_ips="$3" _fproxy_hosts _clients
     if [ "$_name" = " " ]; then
         _name=""
     else
@@ -543,6 +545,11 @@ MakeInstanceNftSets() {
     $NFT_CMD add set $NFT_TABLE "${NFTSET_DNSMASQ}${_name}" { type "$NFTSET_DNSMASQ_TYPE"\; size $NFTSET_MAXELEM_DNSMASQ\; policy "$NFTSET_POLICY_DNSMASQ"\; flags dynamic,timeout\; timeout "$NFTSET_DNSMASQ_TIMEOUT"\; }
     $NFT_CMD add set $NFT_TABLE "${NFTSET_ONION}${_name}" { type "$NFTSET_DNSMASQ_TYPE"\; size $NFTSET_MAXELEM_DNSMASQ\; policy "$NFTSET_POLICY_DNSMASQ"\; flags dynamic,timeout\; timeout "$NFTSET_DNSMASQ_TIMEOUT"\; }
     $NFT_CMD add set $NFT_TABLE "${NFTSET_FPROXY}${_name}" { type "$NFTSET_FPROXY_TYPE"\; policy "$NFTSET_POLICY_CIDR"\; flags interval\; auto-merge\; }
+    $NFT_CMD add set $NFT_TABLE "clients${_name}" { type ipv4_addr\; flags interval\; auto-merge\; }
+    _clients=$(FormatNftSetElemsList "$_client_ips")
+    if [ -n "$_clients" ]; then
+        $NFT_CMD add element $NFT_TABLE "clients${_name}" { "$_clients" }
+    fi
     _fproxy_hosts=$(FormatNftSetElemsList "$_fproxy_list")
     if [ -n "$_fproxy_hosts" ]; then
         $NFT_CMD add element $NFT_TABLE "${NFTSET_FPROXY}${_name}" { "$_fproxy_hosts" }
@@ -555,7 +562,7 @@ AddInstancesNftSets() {
     for _inst in $USER_INSTANCES_ALL_FNAMES
     do
         IncludeUserInstanceVars "$_inst"
-        MakeInstanceNftSets "$U_NAME" "$U_FPROXY_LIST"
+        MakeInstanceNftSets "$U_NAME" "$U_FPROXY_LIST" "$U_CLIENT_IPS"
         ClearUserInstanceVars
     done
     MakeInstanceNftSets " " "$FPROXY_LIST"
@@ -648,7 +655,7 @@ AddUserInstancesNftRules() {
             _route_table_id=0
         fi
         _pkts_mark=$(($_pkts_mark + 1))
-        NftInstanceAdd "\"$U_NAME\"" "$_pkts_mark" "${U_PROXY_MODE:=$INSTANCES_DEF_PROXY_MODE}" "${U_TOR_TRANS_PORT:=$INSTANCES_DEF_TOR_TRANS_PORT}" "$_route_table_id" "\"${U_IF_VPN:=$INSTANCES_DEF_IF_VPN}\"" "${U_T_PROXY_TYPE:=$INSTANCES_DEF_T_PROXY_TYPE}" "${U_T_PROXY_PORT_TCP:=$INSTANCES_DEF_T_PROXY_PORT_TCP}" "${U_T_PROXY_PORT_UDP:=$INSTANCES_DEF_T_PROXY_PORT_UDP}" "${U_T_PROXY_ALLOW_UDP:=$INSTANCES_DEF_T_PROXY_ALLOW_UDP}" "${U_ENABLE_ENTRIES_REMOTE_PROXY:=$INSTANCES_DEF_ENABLE_BLLIST_PROXY}" "${U_ENABLE_FPROXY:=$INSTANCES_DEF_ENABLE_FPROXY}" "\"$U_VPN_GW_IP\""
+        NftInstanceAdd "\"$U_NAME\"" "$_pkts_mark" "${U_PROXY_MODE:=$INSTANCES_DEF_PROXY_MODE}" "${U_TOR_TRANS_PORT:=$INSTANCES_DEF_TOR_TRANS_PORT}" "$_route_table_id" "\"${U_IF_VPN:=$INSTANCES_DEF_IF_VPN}\"" "${U_T_PROXY_TYPE:=$INSTANCES_DEF_T_PROXY_TYPE}" "${U_T_PROXY_PORT_TCP:=$INSTANCES_DEF_T_PROXY_PORT_TCP}" "${U_T_PROXY_PORT_UDP:=$INSTANCES_DEF_T_PROXY_PORT_UDP}" "${U_T_PROXY_ALLOW_UDP:=$INSTANCES_DEF_T_PROXY_ALLOW_UDP}" "${U_ENABLE_ENTRIES_REMOTE_PROXY:=$INSTANCES_DEF_ENABLE_BLLIST_PROXY}" "${U_ENABLE_FPROXY:=$INSTANCES_DEF_ENABLE_FPROXY}" "\"$U_VPN_GW_IP\"" "${U_CLIENT_FILTER:-0}"
         ClearUserInstanceVars
     done
 }
@@ -1350,8 +1357,8 @@ Status() {
             bytes = "";
         }
         /@/ {
-            if(match($0, /@[^ ]+/) != 0) {
-                nftset = substr($0, RSTART+1, RLENGTH-1);
+            if(match($0, /ip daddr @[^ ]+/) != 0) {
+                nftset = substr($0, RSTART+10, RLENGTH-10);
                 if(match($0, /bytes [^ ]+/) != 0) {
                     bytes = substr($0, RSTART+6, RLENGTH-6);
                 };

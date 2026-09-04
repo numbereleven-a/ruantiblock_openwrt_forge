@@ -1,5 +1,33 @@
 # Changelog / История изменений
 
+## 2.1.18-r1 core and LuCI packages
+
+Package versions: `ruantiblock` and `luci-app-ruantiblock` — `2.1.18-r1`.
+
+### English
+
+#### Added
+
+- Added a per-user-list device filter: domain and IP entries can now apply only to devices with the specified IPv4 addresses.
+- Added device selection and an IPv4 address list to LuCI, independently of the selected VPN, Tor or transparent proxy mode.
+
+#### Changed
+
+- Devices outside a list's IPv4 filter continue to subsequent routing rules; an empty device list matches no devices.
+- Existing user lists continue to apply to all devices unless the new filter is enabled.
+
+### Русский
+
+#### Добавлено
+
+- Добавлено ограничение пользовательского списка по устройствам: домены и IP из списка могут действовать только для устройств с указанными IPv4-адресами.
+- В LuCI добавлены выбор устройств и перечень IPv4-адресов независимо от выбранного режима VPN, Tor или прозрачного прокси.
+
+#### Изменено
+
+- Устройства, не входящие в перечень IPv4-адресов списка, обрабатываются следующими правилами маршрутизации; пустой перечень не выбирает ни одного устройства.
+- Существующие пользовательские списки продолжают действовать для всех устройств, пока новый фильтр не включён.
+
 ## 2.1.17-r1 core and LuCI packages
 
 Package versions: `ruantiblock` and `luci-app-ruantiblock` — `2.1.17-r1`.
