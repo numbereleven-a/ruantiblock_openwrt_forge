@@ -75,6 +75,7 @@ check changed-source-old-cache-not-used sh -c '! grep -q 203.0.113.7 "$1"' sh "$
 
 ( Init() { :; }; CheckStatus() { return 1; }; ClearStalePidFile() { :; }
   DropNetConfig() { :; }; SetNetConfig() { :; }; PreStartCheck() { :; }
+  AddBypassEntries() { :; }; MergeDnsmasqNftsets() { :; }
   MakeToken() { :; }; MakeInstancesCache() { :; }; RestartDnsmasq() { :; }
   UpdateBllistSets() { return 0; }
   export BG_LOG="$WORK/background.log"

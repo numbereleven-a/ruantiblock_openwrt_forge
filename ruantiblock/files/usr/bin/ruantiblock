@@ -223,9 +223,10 @@ POST_UPDATE_SCRIPT="${MODULES_DIR}/post_update_script"
 ### Config script
 [ -f "$CONFIG_SCRIPT" ] && . "$CONFIG_SCRIPT"
 
-export DNSMASQ_DATA_FILE_BYPASS="${DNSMASQ_CONFDIR}/00-${NAME}_bypass.dnsmasq"
-export DNSMASQ_DATA_FILE_USER_INSTANCES="${DNSMASQ_CONFDIR}/01-${NAME}_user_instances.dnsmasq"
-export DNSMASQ_DATA_FILE="${DNSMASQ_CONFDIR}/02-${NAME}.dnsmasq"
+export DNSMASQ_CONFIG_FILE_BYPASS="${DNSMASQ_CONFDIR}/00-${NAME}_bypass.dnsmasq"
+export DNSMASQ_CONFIG_FILE_USER_INSTANCES="${DNSMASQ_CONFDIR}/01-${NAME}_user_instances.dnsmasq"
+export DNSMASQ_CONFIG_FILE="${DNSMASQ_CONFDIR}/02-${NAME}.dnsmasq"
+export DNSMASQ_DATA_FILE_NFTSETS="${DNSMASQ_CONFDIR}/03-${NAME}_nftsets.dnsmasq"
 
 ### Utilities
 export AWK_CMD="awk"
@@ -264,6 +265,9 @@ ROUTE_CHECK_EXEC="${MODULES_DIR}/ruab_route_check"
 export IP_DATA_FILE="${DATA_DIR}/${NAME}.ip"
 export IP_DATA_FILE_BYPASS="${DATA_DIR}/${NAME}_bypass.ip"
 export IP_DATA_FILE_USER_INSTANCES="${DATA_DIR}/${NAME}_user_instances.ip"
+export DNSMASQ_DATA_FILE="${DATA_DIR}/${NAME}.dnsmasq"
+export DNSMASQ_DATA_FILE_BYPASS="${DATA_DIR}/${NAME}_bypass.dnsmasq"
+export DNSMASQ_DATA_FILE_USER_INSTANCES="${DATA_DIR}/${NAME}_user_instances.dnsmasq"
 export NFT_TABLE="ip r"
 export NFT_TABLE_DNSMASQ="4#ip#r"
 export NFTSET_LOCAL_IP="local_ip"
@@ -441,6 +445,91 @@ DownloadNativeBlacklist() {
 
 RestartDnsmasq() {
     eval $(echo "$DNSMASQ_RESTART_CMD")
+}
+
+MergeDnsmasqNftsets() {
+    local _return_code=0
+    local _bypass_tmp="${DNSMASQ_CONFIG_FILE_BYPASS}.tmp"
+    local _user_tmp="${DNSMASQ_CONFIG_FILE_USER_INSTANCES}.tmp"
+    local _main_tmp="${DNSMASQ_CONFIG_FILE}.tmp"
+    local _merged_tmp="${DNSMASQ_DATA_FILE_NFTSETS}.tmp"
+
+    $AWK_CMD '$0 !~ /^nftset=\//' "$DNSMASQ_DATA_FILE_BYPASS" > "$_bypass_tmp" || _return_code=1
+    $AWK_CMD '$0 !~ /^nftset=\//' "$DNSMASQ_DATA_FILE_USER_INSTANCES" > "$_user_tmp" || _return_code=1
+    $AWK_CMD '$0 !~ /^nftset=\//' "$DNSMASQ_DATA_FILE" > "$_main_tmp" || _return_code=1
+
+    if [ $_return_code -eq 0 ]; then
+        $AWK_CMD '
+            function addDirect(domain, target,  key) {
+                key = domain SUBSEP target;
+                if(!(key in direct)) {
+                    direct[key] = 1;
+                    direct_targets[domain] = direct_targets[domain] (length(direct_targets[domain]) ? "," : "") target;
+                };
+            };
+            function addEffective(domain, target,  key) {
+                key = domain SUBSEP target;
+                if(!(key in effective)) {
+                    effective[key] = 1;
+                    effective_targets[domain] = effective_targets[domain] (length(effective_targets[domain]) ? "," : "") target;
+                };
+            };
+            function mergeTargets(domain, source,  count, list, i) {
+                count = split(direct_targets[source], list, ",");
+                for(i = 1; i <= count; i++) {
+                    if(length(list[i])) addEffective(domain, list[i]);
+                };
+            };
+            /^nftset=\// {
+                line = substr($0, 8);
+                count = split(line, parts, "/");
+                if(count < 3 || length(parts[count]) == 0) {
+                    failed = 1;
+                    exit;
+                };
+                target_count = split(parts[count], targets, ",");
+                for(i = 2; i < count; i++) {
+                    domain = parts[i];
+                    domains[domain] = 1;
+                    for(j = 1; j <= target_count; j++) {
+                        if(length(targets[j]) > 0) {
+                            addDirect(domain, targets[j]);
+                        };
+                    };
+                };
+                next;
+            };
+            END {
+                if(failed) exit 1;
+                for(domain in domains) {
+                    mergeTargets(domain, domain);
+                    parent = domain;
+                    while(index(parent, ".") > 0) {
+                        sub(/^[^.]+[.]/, "", parent);
+                        if(parent in domains) {
+                            mergeTargets(domain, parent);
+                        };
+                    };
+                };
+                for(domain in domains) {
+                    printf "nftset=/%s/%s\n", domain, effective_targets[domain];
+                };
+            }' "$DNSMASQ_DATA_FILE_BYPASS" "$DNSMASQ_DATA_FILE_USER_INSTANCES" "$DNSMASQ_DATA_FILE" > "$_merged_tmp" || _return_code=1
+    fi
+
+    if [ $_return_code -eq 0 ]; then
+        mv -f "$_bypass_tmp" "$DNSMASQ_CONFIG_FILE_BYPASS" || _return_code=1
+        mv -f "$_user_tmp" "$DNSMASQ_CONFIG_FILE_USER_INSTANCES" || _return_code=1
+        mv -f "$_main_tmp" "$DNSMASQ_CONFIG_FILE" || _return_code=1
+        mv -f "$_merged_tmp" "$DNSMASQ_DATA_FILE_NFTSETS" || _return_code=1
+    fi
+
+    if [ $_return_code -ne 0 ]; then
+        rm -f "$_bypass_tmp" "$_user_tmp" "$_main_tmp" "$_merged_tmp"
+        echo " Error! Unable to merge dnsmasq nftset rules" >&2
+        MakeLogRecord "err" "Error! Unable to merge dnsmasq nftset rules"
+    fi
+    return $_return_code
 }
 
 FlushNftSets() {
@@ -855,12 +944,16 @@ ClearDataFiles() {
     if [ -d "$DNSMASQ_CONFDIR" ]; then
          if [ -z "$_arg" -o "$_arg" = "main_instance" ]; then
             printf "" > "$DNSMASQ_DATA_FILE"
+            printf "" > "$DNSMASQ_CONFIG_FILE"
         fi
         if [ -z "$_arg" -o "$_arg" = "user_instances" ]; then
             printf "" > "$DNSMASQ_DATA_FILE_USER_INSTANCES"
+            printf "" > "$DNSMASQ_CONFIG_FILE_USER_INSTANCES"
         fi
         if [ -z "$_arg" ]; then
             printf "" > "$DNSMASQ_DATA_FILE_BYPASS"
+            printf "" > "$DNSMASQ_CONFIG_FILE_BYPASS"
+            printf "" > "$DNSMASQ_DATA_FILE_NFTSETS"
         fi
     fi
 }
@@ -870,10 +963,14 @@ PreStartCheck() {
     [ "$ENABLE_HTML_INFO" = "1" -a ! -d "$HTML_DIR" ] && mkdir -p "$HTML_DIR"
     ### Костыль для старта dnsmasq
     if [ -d "$DNSMASQ_CONFDIR" ]; then
-        [ -e "$DNSMASQ_DATA_FILE" ] || printf "" > "$DNSMASQ_DATA_FILE"
-        [ -e "$DNSMASQ_DATA_FILE_BYPASS" ] || printf "" > "$DNSMASQ_DATA_FILE_BYPASS"
-        [ -e "$DNSMASQ_DATA_FILE_USER_INSTANCES" ] || printf "" > "$DNSMASQ_DATA_FILE_USER_INSTANCES"
+        [ -e "$DNSMASQ_CONFIG_FILE" ] || printf "" > "$DNSMASQ_CONFIG_FILE"
+        [ -e "$DNSMASQ_CONFIG_FILE_BYPASS" ] || printf "" > "$DNSMASQ_CONFIG_FILE_BYPASS"
+        [ -e "$DNSMASQ_CONFIG_FILE_USER_INSTANCES" ] || printf "" > "$DNSMASQ_CONFIG_FILE_USER_INSTANCES"
+        [ -e "$DNSMASQ_DATA_FILE_NFTSETS" ] || printf "" > "$DNSMASQ_DATA_FILE_NFTSETS"
     fi
+    [ -e "$DNSMASQ_DATA_FILE" ] || printf "" > "$DNSMASQ_DATA_FILE"
+    [ -e "$DNSMASQ_DATA_FILE_BYPASS" ] || printf "" > "$DNSMASQ_DATA_FILE_BYPASS"
+    [ -e "$DNSMASQ_DATA_FILE_USER_INSTANCES" ] || printf "" > "$DNSMASQ_DATA_FILE_USER_INSTANCES"
 }
 
 AddBypassEntries() {
@@ -1136,6 +1233,7 @@ GetMainInstanceEntries() {
 
 GetBlacklistFiles() {
     local _return_code=0 _user_entries_ret_code=1
+    PreStartCheck
     AddBypassEntries
     GetMainInstanceEntries
     case $? in
@@ -1162,6 +1260,7 @@ GetBlacklistFiles() {
     if [ $_return_code -eq 0 ]; then
         _return_code=$_user_entries_ret_code
     fi
+    MergeDnsmasqNftsets || _return_code=1
     return $_return_code
 }
 
@@ -1252,9 +1351,16 @@ Start() {
         DropNetConfig &> /dev/null
         SetNetConfig
         PreStartCheck
+        AddBypassEntries
         # Rebuild local user-entry files so disabled/removed instances cannot
         # leave stale dnsmasq directives or nft data behind after a restart.
         AddUserEntries cached
+        MergeDnsmasqNftsets
+        if [ $? -ne 0 ]; then
+            rm -f "$START_PID_FILE"
+            MakeToken
+            return 1
+        fi
         UpdateBllistSets
         _return_code=$?
         RestartDnsmasq

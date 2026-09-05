@@ -1,5 +1,23 @@
 # Changelog / История изменений
 
+## 2.1.18-r2 core and LuCI packages
+
+Package versions: `ruantiblock` and `luci-app-ruantiblock` — `2.1.18-r2`.
+
+### English
+
+#### Fixed
+
+- Consolidated dnsmasq nftset rules for duplicate and nested domains so DNS answers populate every applicable main, user-list and bypass set.
+- Rebuilt local bypass entries during service startup and restart even when the startup update is disabled.
+
+### Русский
+
+#### Исправлено
+
+- Объединены правила dnsmasq для одинаковых и вложенных доменов, чтобы DNS-ответы добавлялись во все подходящие наборы основного списка, пользовательских списков и исключений.
+- Локальные исключения теперь заново строятся при запуске и перезапуске службы, даже если обновление при старте выключено.
+
 ## 2.1.18-r1 core and LuCI packages
 
 Package versions: `ruantiblock` and `luci-app-ruantiblock` — `2.1.18-r1`.

@@ -18,16 +18,31 @@ jobs:
             format: ipk
             sdk_file: openwrt-sdk-24.10.8-x86-64_gcc-13.3.0_musl.Linux-x86_64.tar.zst
             sdk_sha256: ac4a0405d2eea821b06f93c14ba13ffa90ad0457648903df7dde02570027ab21
-            archive: ruantiblock-2.1.17-r1-openwrt-23.05-24.10-ipk.zip
+            archive_suffix: openwrt-23.05-24.10-ipk
           - openwrt: 25.12.5
             format: apk
             sdk_file: openwrt-sdk-25.12.5-x86-64_gcc-14.3.0_musl.Linux-x86_64.tar.zst
             sdk_sha256: 0c8df0151a1e88feb7c03d694d61f6a18d51872815b7c811d76e2b77504d5e9c
-            archive: ruantiblock-2.1.17-r1-openwrt-25.12-apk.zip
+            archive_suffix: openwrt-25.12-apk
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+
+      - name: Determine package version
+        env:
+          ARCHIVE_SUFFIX: ${{ matrix.archive_suffix }}
+        run: |
+          core_version=$(sed -n 's/^PKG_VERSION:=//p' ruantiblock/Makefile)
+          core_release=$(sed -n 's/^PKG_RELEASE:=//p' ruantiblock/Makefile)
+          luci_version=$(sed -n 's/^PKG_VERSION:=//p' luci-app-ruantiblock/Makefile)
+          luci_release=$(sed -n 's/^PKG_RELEASE:=//p' luci-app-ruantiblock/Makefile)
+          test -n "$core_version"
+          test -n "$core_release"
+          test "$core_version" = "$luci_version"
+          test "$core_release" = "$luci_release"
+          printf 'ARCHIVE_NAME=ruantiblock-%s-r%s-%s.zip\n' \
+            "$core_version" "$core_release" "$ARCHIVE_SUFFIX" >> "$GITHUB_ENV"
 
       - name: Install host tools
         run: sudo apt-get update && sudo apt-get install --yes zstd
@@ -80,7 +95,6 @@ jobs:
       - name: Assemble release archive
         env:
           PACKAGE_FORMAT: ${{ matrix.format }}
-          ARCHIVE_NAME: ${{ matrix.archive }}
         working-directory: ${{ runner.temp }}/openwrt-sdk
         run: |
           output="$RUNNER_TEMP/release"
@@ -100,6 +114,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: release-${{ matrix.format }}
-          path: ${{ matrix.archive }}
+          path: ${{ env.ARCHIVE_NAME }}
           if-no-files-found: error
           retention-days: 7
