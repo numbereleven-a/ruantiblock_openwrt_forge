@@ -2,6 +2,7 @@
 # Isolated checks for generated dnsmasq files and startup ordering.
 ROOT="$1"
 WORK="$2"
+DATA_DIR="$WORK/data"
 mkdir -p "$WORK/data" "$WORK/conf" || exit 1
 FAILED=0
 check() {

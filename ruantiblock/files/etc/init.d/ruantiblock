@@ -10,7 +10,7 @@ UBUS_ATTEMPTS=10
 
 get_dnsmasq_confdir() {
 	local _current_dir="$1" _i=0 _first_instance_dir
-	if [ -d "${VAR_DIR}/dnsmasq.d" ]; then
+	if [ -d "${VAR_DIR}/dnsmasq.d" ] && { [ -z "$_current_dir" ] || [ "$_current_dir" = "${VAR_DIR}/dnsmasq.d" ]; }; then
 		printf "${VAR_DIR}/dnsmasq.d"
 		return 0
 	else
@@ -33,6 +33,10 @@ get_dnsmasq_confdir() {
 				}')
 			if [ -n "$_first_instance_dir" ]; then
 				printf '%s' "$_first_instance_dir"
+				return 0
+			fi
+			if [ -d "${VAR_DIR}/dnsmasq.d" ]; then
+				printf '%s' "${VAR_DIR}/dnsmasq.d"
 				return 0
 			fi
 			_i=$(($_i + 1))

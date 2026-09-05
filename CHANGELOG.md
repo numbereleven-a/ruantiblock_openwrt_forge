@@ -10,6 +10,12 @@ Package versions: `ruantiblock` and `luci-app-ruantiblock` — `2.1.18-r2`.
 
 - Consolidated dnsmasq nftset rules for duplicate and nested domains so DNS answers populate every applicable main, user-list and bypass set.
 - Rebuilt local bypass entries during service startup and restart even when the startup update is disabled.
+- Preserved the previous DNS configuration and source data when preparation fails, and stopped applying incomplete updates.
+- Rolled back DNS file replacements when publication fails and moved temporary files outside the active dnsmasq configuration directory.
+- Removed partial network configuration after a failed startup so the next start can recover normally.
+- Validated bypass IP addresses, prefixes and DNS ports before applying entries, and removed the premature clearing of bypass sets.
+- Reported dnsmasq restart failures through startup and update return codes.
+- Preserved the selected dnsmasq instance when the default configuration directory also exists.
 
 ### Русский
 
@@ -17,6 +23,12 @@ Package versions: `ruantiblock` and `luci-app-ruantiblock` — `2.1.18-r2`.
 
 - Объединены правила dnsmasq для одинаковых и вложенных доменов, чтобы DNS-ответы добавлялись во все подходящие наборы основного списка, пользовательских списков и исключений.
 - Локальные исключения теперь заново строятся при запуске и перезапуске службы, даже если обновление при старте выключено.
+- При ошибке подготовки сохраняются прежние DNS-конфигурация и исходные данные, а применение неполного обновления прекращается.
+- При ошибке замены DNS-файлов восстанавливается прежняя конфигурация, а временные файлы создаются вне рабочего каталога dnsmasq.
+- После неудачного запуска удаляется частично созданная сетевая конфигурация, чтобы повторный запуск мог восстановить работу.
+- Добавлена проверка IP-адресов, префиксов и DNS-портов исключений до применения записей и убрана преждевременная очистка наборов исключений.
+- Ошибка перезапуска dnsmasq теперь отражается в результате запуска и обновления службы.
+- Сохраняется выбранный экземпляр dnsmasq, даже если одновременно существует стандартный каталог конфигурации.
 
 ## 2.1.18-r1 core and LuCI packages
 
