@@ -36,7 +36,7 @@ check translation-not-duplicated test ! -e "$ROOT/luci-app-ruantiblock/root/usr/
 
 ipk_name="ruantiblock-${core_version}-r${core_release}-openwrt-23.05-24.10-ipk.zip"
 apk_name="ruantiblock-${core_version}-r${core_release}-openwrt-25.12-apk.zip"
-check ipk-name test "$ipk_name" = 'ruantiblock-2.1.18-r2-openwrt-23.05-24.10-ipk.zip'
-check apk-name test "$apk_name" = 'ruantiblock-2.1.18-r2-openwrt-25.12-apk.zip'
+check ipk-name test "$ipk_name" = 'ruantiblock-2.1.19-r1-openwrt-23.05-24.10-ipk.zip'
+check apk-name test "$apk_name" = 'ruantiblock-2.1.19-r1-openwrt-25.12-apk.zip'
 
 exit "$FAILED"

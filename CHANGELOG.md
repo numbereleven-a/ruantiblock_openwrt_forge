@@ -1,5 +1,27 @@
 # Changelog / История изменений
 
+## 2.1.19-r1 core and LuCI packages
+
+Package versions: `ruantiblock` and `luci-app-ruantiblock` — `2.1.19-r1`.
+
+### English
+
+#### Fixed
+
+- Propagated nft set and rule creation errors instead of masking them with subsequent successful commands.
+- Applied the main, user-list and bypass IP sets in one nft transaction, preventing partial updates when any input file is rejected.
+- Handled missing blacklist-update metadata and incomplete response entries on the LuCI statistics page.
+- Kept global LuCI polling running after statistics query errors or a disabled service, with repeated error notifications suppressed until a successful response.
+
+### Русский
+
+#### Исправлено
+
+- Ошибки создания nft-наборов и правил больше не скрываются за успешным результатом последующих команд.
+- IP-наборы основного списка, пользовательских списков и исключений теперь обновляются одной операцией nftables, без частичного применения при ошибке в одном из файлов.
+- Страница статистики LuCI корректно обрабатывает отсутствующие данные последнего обновления и неполные элементы ответа.
+- Ошибки запроса статистики и выключенная служба больше не останавливают общий опрос LuCI; повторные уведомления не накапливаются до успешного ответа.
+
 ## 2.1.18-r2 core and LuCI packages
 
 Package versions: `ruantiblock` and `luci-app-ruantiblock` — `2.1.18-r2`.

@@ -616,32 +616,32 @@ FormatNftSetElemsList() {
 UpdateLocalIpSets() {
     local _local_ips _fproxy_private
     _local_ips=$($IP_CMD -4 addr list 2> /dev/null | $AWK_CMD '/inet/{if($2 !~ /^(127|0)/) printf $2 ","}')
-    FlushNftSets "$NFTSET_LOCAL_IP"
+    FlushNftSets "$NFTSET_LOCAL_IP" || return 1
     if [ -n "$_local_ips" ]; then
-        $NFT_CMD add element $NFT_TABLE "$NFTSET_LOCAL_IP" { "$_local_ips" }
+        $NFT_CMD add element $NFT_TABLE "$NFTSET_LOCAL_IP" { "$_local_ips" } || return 1
     fi
-    FlushNftSets "$NFTSET_FPROXY_LOCAL"
+    FlushNftSets "$NFTSET_FPROXY_LOCAL" || return 1
     _fproxy_private=$(FormatNftSetElemsList "$FPROXY_PRIVATE_NETS")
     if [ -n "$_fproxy_private" ]; then
-        $NFT_CMD add element $NFT_TABLE "$NFTSET_FPROXY_LOCAL" { "$_fproxy_private" }
+        $NFT_CMD add element $NFT_TABLE "$NFTSET_FPROXY_LOCAL" { "$_fproxy_private" } || return 1
     fi
     if [ -n "$_local_ips" ]; then
-        $NFT_CMD add element $NFT_TABLE "$NFTSET_FPROXY_LOCAL" { "$_local_ips" }
+        $NFT_CMD add element $NFT_TABLE "$NFTSET_FPROXY_LOCAL" { "$_local_ips" } || return 1
     fi
 }
 
 AddBaseNftSets() {
     local _allowed_hosts
-    $NFT_CMD add set $NFT_TABLE "$NFTSET_LOCAL_IP" { type "$NFTSET_LOCAL_IP_TYPE"\; policy "$NFTSET_POLICY_CIDR"\; flags interval\; auto-merge\; }
-    $NFT_CMD add set $NFT_TABLE "$NFTSET_ALLOWED_HOSTS" { type "$NFTSET_ALLOWED_HOSTS_TYPE"\; policy "$NFTSET_POLICY_CIDR"\; flags interval\; auto-merge\; }
+    $NFT_CMD add set $NFT_TABLE "$NFTSET_LOCAL_IP" { type "$NFTSET_LOCAL_IP_TYPE"\; policy "$NFTSET_POLICY_CIDR"\; flags interval\; auto-merge\; } || return 1
+    $NFT_CMD add set $NFT_TABLE "$NFTSET_ALLOWED_HOSTS" { type "$NFTSET_ALLOWED_HOSTS_TYPE"\; policy "$NFTSET_POLICY_CIDR"\; flags interval\; auto-merge\; } || return 1
     _allowed_hosts=$(FormatNftSetElemsList "$ALLOWED_HOSTS_LIST")
     if [ -n "$_allowed_hosts" ]; then
-        $NFT_CMD add element $NFT_TABLE "$NFTSET_ALLOWED_HOSTS" { "$_allowed_hosts" }
+        $NFT_CMD add element $NFT_TABLE "$NFTSET_ALLOWED_HOSTS" { "$_allowed_hosts" } || return 1
     fi
-    $NFT_CMD add set $NFT_TABLE "$NFTSET_BYPASS_IP" { type "$NFTSET_BYPASS_IP_TYPE"\; size $NFTSET_MAXELEM_BYPASS_IP\; policy "$NFTSET_POLICY_CIDR"\; flags interval\; auto-merge\; }
-    $NFT_CMD add set $NFT_TABLE "$NFTSET_BYPASS_FQDN" { type "$NFTSET_BYPASS_FQDN_TYPE"\; size $NFTSET_MAXELEM_BYPASS_FQDN\; policy "$NFTSET_POLICY_DNSMASQ"\; flags dynamic,timeout\; timeout "$NFTSET_DNSMASQ_TIMEOUT"\; }
-    $NFT_CMD add set $NFT_TABLE "$NFTSET_FPROXY_LOCAL" { type "$NFTSET_FPROXY_LOCAL_TYPE"\; policy "$NFTSET_POLICY_CIDR"\; flags interval\; auto-merge\; }
-    UpdateLocalIpSets
+    $NFT_CMD add set $NFT_TABLE "$NFTSET_BYPASS_IP" { type "$NFTSET_BYPASS_IP_TYPE"\; size $NFTSET_MAXELEM_BYPASS_IP\; policy "$NFTSET_POLICY_CIDR"\; flags interval\; auto-merge\; } || return 1
+    $NFT_CMD add set $NFT_TABLE "$NFTSET_BYPASS_FQDN" { type "$NFTSET_BYPASS_FQDN_TYPE"\; size $NFTSET_MAXELEM_BYPASS_FQDN\; policy "$NFTSET_POLICY_DNSMASQ"\; flags dynamic,timeout\; timeout "$NFTSET_DNSMASQ_TIMEOUT"\; } || return 1
+    $NFT_CMD add set $NFT_TABLE "$NFTSET_FPROXY_LOCAL" { type "$NFTSET_FPROXY_LOCAL_TYPE"\; policy "$NFTSET_POLICY_CIDR"\; flags interval\; auto-merge\; } || return 1
+    UpdateLocalIpSets || return 1
 }
 
 MakeInstanceNftSets() {
@@ -651,21 +651,21 @@ MakeInstanceNftSets() {
     else
         _name=".${_name}"
     fi
-    $NFT_CMD add set $NFT_TABLE "${NFTSET_CIDR}${_name}" { type "$NFTSET_CIDR_TYPE"\; size $NFTSET_MAXELEM_CIDR\; policy "$NFTSET_POLICY_CIDR"\; flags interval\; auto-merge\; }
-    $NFT_CMD add set $NFT_TABLE "${NFTSET_IP}${_name}" { type "$NFTSET_IP_TYPE"\; size $NFTSET_MAXELEM_IP\; policy "$NFTSET_POLICY_IP"\; flags dynamic\; }
-    $NFT_CMD add set $NFT_TABLE "${NFTSET_DNSMASQ}${_name}" { type "$NFTSET_DNSMASQ_TYPE"\; size $NFTSET_MAXELEM_DNSMASQ\; policy "$NFTSET_POLICY_DNSMASQ"\; flags dynamic,timeout\; timeout "$NFTSET_DNSMASQ_TIMEOUT"\; }
-    $NFT_CMD add set $NFT_TABLE "${NFTSET_ONION}${_name}" { type "$NFTSET_DNSMASQ_TYPE"\; size $NFTSET_MAXELEM_DNSMASQ\; policy "$NFTSET_POLICY_DNSMASQ"\; flags dynamic,timeout\; timeout "$NFTSET_DNSMASQ_TIMEOUT"\; }
-    $NFT_CMD add set $NFT_TABLE "${NFTSET_FPROXY}${_name}" { type "$NFTSET_FPROXY_TYPE"\; policy "$NFTSET_POLICY_CIDR"\; flags interval\; auto-merge\; }
-    $NFT_CMD add set $NFT_TABLE "clients${_name}" { type ipv4_addr\; flags interval\; auto-merge\; }
+    $NFT_CMD add set $NFT_TABLE "${NFTSET_CIDR}${_name}" { type "$NFTSET_CIDR_TYPE"\; size $NFTSET_MAXELEM_CIDR\; policy "$NFTSET_POLICY_CIDR"\; flags interval\; auto-merge\; } || return 1
+    $NFT_CMD add set $NFT_TABLE "${NFTSET_IP}${_name}" { type "$NFTSET_IP_TYPE"\; size $NFTSET_MAXELEM_IP\; policy "$NFTSET_POLICY_IP"\; flags dynamic\; } || return 1
+    $NFT_CMD add set $NFT_TABLE "${NFTSET_DNSMASQ}${_name}" { type "$NFTSET_DNSMASQ_TYPE"\; size $NFTSET_MAXELEM_DNSMASQ\; policy "$NFTSET_POLICY_DNSMASQ"\; flags dynamic,timeout\; timeout "$NFTSET_DNSMASQ_TIMEOUT"\; } || return 1
+    $NFT_CMD add set $NFT_TABLE "${NFTSET_ONION}${_name}" { type "$NFTSET_DNSMASQ_TYPE"\; size $NFTSET_MAXELEM_DNSMASQ\; policy "$NFTSET_POLICY_DNSMASQ"\; flags dynamic,timeout\; timeout "$NFTSET_DNSMASQ_TIMEOUT"\; } || return 1
+    $NFT_CMD add set $NFT_TABLE "${NFTSET_FPROXY}${_name}" { type "$NFTSET_FPROXY_TYPE"\; policy "$NFTSET_POLICY_CIDR"\; flags interval\; auto-merge\; } || return 1
+    $NFT_CMD add set $NFT_TABLE "clients${_name}" { type ipv4_addr\; flags interval\; auto-merge\; } || return 1
     _clients=$(FormatNftSetElemsList "$_client_ips")
     if [ -n "$_clients" ]; then
-        $NFT_CMD add element $NFT_TABLE "clients${_name}" { "$_clients" }
+        $NFT_CMD add element $NFT_TABLE "clients${_name}" { "$_clients" } || return 1
     fi
     _fproxy_hosts=$(FormatNftSetElemsList "$_fproxy_list")
     if [ -n "$_fproxy_hosts" ]; then
-        $NFT_CMD add element $NFT_TABLE "${NFTSET_FPROXY}${_name}" { "$_fproxy_hosts" }
+        $NFT_CMD add element $NFT_TABLE "${NFTSET_FPROXY}${_name}" { "$_fproxy_hosts" } || return 1
     fi
-    $NFT_CMD add set $NFT_TABLE "${NFTSET_BLLIST_PROXY}${_name}" { type "$NFTSET_BLLIST_PROXY_TYPE"\; policy "$NFTSET_POLICY_IP"\; flags dynamic\; }
+    $NFT_CMD add set $NFT_TABLE "${NFTSET_BLLIST_PROXY}${_name}" { type "$NFTSET_BLLIST_PROXY_TYPE"\; policy "$NFTSET_POLICY_IP"\; flags dynamic\; } || return 1
 }
 
 AddInstancesNftSets() {
@@ -673,10 +673,10 @@ AddInstancesNftSets() {
     for _inst in $USER_INSTANCES_ALL_FNAMES
     do
         IncludeUserInstanceVars "$_inst"
-        MakeInstanceNftSets "$U_NAME" "$U_FPROXY_LIST" "$U_CLIENT_IPS"
+        MakeInstanceNftSets "$U_NAME" "$U_FPROXY_LIST" "$U_CLIENT_IPS" || return 1
         ClearUserInstanceVars
     done
-    MakeInstanceNftSets " " "$FPROXY_LIST"
+    MakeInstanceNftSets " " "$FPROXY_LIST" || return 1
 }
 
 UpdateBllistProxySet() {
@@ -724,28 +724,32 @@ UpdateBllistProxySet() {
 }
 
 UpdateBllistSets() {
-    local _return_code=0 _file _file_return_code _files_updated=0
+    local _return_code=0 _file _batch=""
     for _file in "$IP_DATA_FILE_BYPASS" "$IP_DATA_FILE_USER_INSTANCES" "$IP_DATA_FILE"
     do
         [ -f "$_file" ] || continue
-        if [ $_files_updated -eq 0 ]; then
-            echo " Updating nft sets..."
+        if [ -z "$_batch" ]; then
+            _batch=$(mktemp "${DATA_DIR}/nft-load.XXXXXX") || return 1
         fi
-        $NFT_CMD -f "$_file"
-        _file_return_code=$?
-        _files_updated=1
-        if [ $_file_return_code -ne 0 ]; then
-            _return_code=$_file_return_code
-            echo " Error! Nft set file wasn't applied [${_file}]" >&2
-            MakeLogRecord "err" "Error! Nft set file wasn't applied [${_file}]"
+        if ! { cat "$_file" >> "$_batch" && printf '\n' >> "$_batch"; }; then
+            _return_code=1
+            break
         fi
     done
-    if [ $_files_updated -eq 1 ]; then
+    if [ -n "$_batch" ]; then
+        # One batch covers every IP set: a bad later file must not leave
+        # earlier sets updated while the remaining sets still contain old data.
+        if [ $_return_code -eq 0 ]; then
+            echo " Updating nft sets..."
+            $NFT_CMD -f "$_batch"
+            _return_code=$?
+        fi
+        rm -f "$_batch"
         if [ $_return_code -eq 0 ]; then
             echo " Ok"
         else
-            echo " Error! Nft sets weren't fully updated" >&2
-            MakeLogRecord "err" "Error! Nft sets weren't fully updated"
+            echo " Error! Nft set batch wasn't applied" >&2
+            MakeLogRecord "err" "Error! Nft set batch wasn't applied"
         fi
     fi
     return $_return_code
@@ -766,7 +770,7 @@ AddUserInstancesNftRules() {
             _route_table_id=0
         fi
         _pkts_mark=$(($_pkts_mark + 1))
-        NftInstanceAdd "\"$U_NAME\"" "$_pkts_mark" "${U_PROXY_MODE:=$INSTANCES_DEF_PROXY_MODE}" "${U_TOR_TRANS_PORT:=$INSTANCES_DEF_TOR_TRANS_PORT}" "$_route_table_id" "\"${U_IF_VPN:=$INSTANCES_DEF_IF_VPN}\"" "${U_T_PROXY_TYPE:=$INSTANCES_DEF_T_PROXY_TYPE}" "${U_T_PROXY_PORT_TCP:=$INSTANCES_DEF_T_PROXY_PORT_TCP}" "${U_T_PROXY_PORT_UDP:=$INSTANCES_DEF_T_PROXY_PORT_UDP}" "${U_T_PROXY_ALLOW_UDP:=$INSTANCES_DEF_T_PROXY_ALLOW_UDP}" "${U_ENABLE_ENTRIES_REMOTE_PROXY:=$INSTANCES_DEF_ENABLE_BLLIST_PROXY}" "${U_ENABLE_FPROXY:=$INSTANCES_DEF_ENABLE_FPROXY}" "\"$U_VPN_GW_IP\"" "${U_CLIENT_FILTER:-0}"
+        NftInstanceAdd "\"$U_NAME\"" "$_pkts_mark" "${U_PROXY_MODE:=$INSTANCES_DEF_PROXY_MODE}" "${U_TOR_TRANS_PORT:=$INSTANCES_DEF_TOR_TRANS_PORT}" "$_route_table_id" "\"${U_IF_VPN:=$INSTANCES_DEF_IF_VPN}\"" "${U_T_PROXY_TYPE:=$INSTANCES_DEF_T_PROXY_TYPE}" "${U_T_PROXY_PORT_TCP:=$INSTANCES_DEF_T_PROXY_PORT_TCP}" "${U_T_PROXY_PORT_UDP:=$INSTANCES_DEF_T_PROXY_PORT_UDP}" "${U_T_PROXY_ALLOW_UDP:=$INSTANCES_DEF_T_PROXY_ALLOW_UDP}" "${U_ENABLE_ENTRIES_REMOTE_PROXY:=$INSTANCES_DEF_ENABLE_BLLIST_PROXY}" "${U_ENABLE_FPROXY:=$INSTANCES_DEF_ENABLE_FPROXY}" "\"$U_VPN_GW_IP\"" "${U_CLIENT_FILTER:-0}" || return 1
         ClearUserInstanceVars
     done
 }
@@ -830,12 +834,12 @@ AddNftRules() {
     else
         _route_table_id=0
     fi
-    NftAddBaseChains $_chain_prio_first $_chain_prio_local $_chain_prio_fproxy
-    NftAddActionChains $_chain_prio_action
-    AddUserInstancesNftRules
-    NftInstanceAdd "\" \"" "$PKTS_MARK_START" "${PROXY_MODE:=$INSTANCES_DEF_PROXY_MODE}" "${TOR_TRANS_PORT:=$INSTANCES_DEF_TOR_TRANS_PORT}" "$_route_table_id" "\"${IF_VPN:=$INSTANCES_DEF_IF_VPN}\"" "${T_PROXY_TYPE:=$INSTANCES_DEF_T_PROXY_TYPE}" "${T_PROXY_PORT_TCP:=$INSTANCES_DEF_T_PROXY_PORT_TCP}" "${T_PROXY_PORT_UDP:=$INSTANCES_DEF_T_PROXY_PORT_UDP}" "${T_PROXY_ALLOW_UDP:=$INSTANCES_DEF_T_PROXY_ALLOW_UDP}" "${ENABLE_BLLIST_PROXY:=$INSTANCES_DEF_ENABLE_BLLIST_PROXY}" "${ENABLE_FPROXY:=$INSTANCES_DEF_ENABLE_FPROXY}" "\"$VPN_GW_IP\""
+    NftAddBaseChains $_chain_prio_first $_chain_prio_local $_chain_prio_fproxy || return 1
+    NftAddActionChains $_chain_prio_action || return 1
+    AddUserInstancesNftRules || return 1
+    NftInstanceAdd "\" \"" "$PKTS_MARK_START" "${PROXY_MODE:=$INSTANCES_DEF_PROXY_MODE}" "${TOR_TRANS_PORT:=$INSTANCES_DEF_TOR_TRANS_PORT}" "$_route_table_id" "\"${IF_VPN:=$INSTANCES_DEF_IF_VPN}\"" "${T_PROXY_TYPE:=$INSTANCES_DEF_T_PROXY_TYPE}" "${T_PROXY_PORT_TCP:=$INSTANCES_DEF_T_PROXY_PORT_TCP}" "${T_PROXY_PORT_UDP:=$INSTANCES_DEF_T_PROXY_PORT_UDP}" "${T_PROXY_ALLOW_UDP:=$INSTANCES_DEF_T_PROXY_ALLOW_UDP}" "${ENABLE_BLLIST_PROXY:=$INSTANCES_DEF_ENABLE_BLLIST_PROXY}" "${ENABLE_FPROXY:=$INSTANCES_DEF_ENABLE_FPROXY}" "\"$VPN_GW_IP\"" || return 1
     if [ "$PROXY_LOCAL_CLIENTS" = "1" ]; then
-        NftAddLocalClientsRule
+        NftAddLocalClientsRule || return 1
     fi
 }
 
@@ -852,10 +856,10 @@ DeleteNftRules() {
 }
 
 SetNetConfig() {
-    $NFT_CMD add table $NFT_TABLE
-    AddBaseNftSets
-    AddInstancesNftSets
-    AddNftRules
+    $NFT_CMD add table $NFT_TABLE || return 1
+    AddBaseNftSets || return 1
+    AddInstancesNftSets || return 1
+    AddNftRules || return 1
 }
 
 DropNetConfig() {

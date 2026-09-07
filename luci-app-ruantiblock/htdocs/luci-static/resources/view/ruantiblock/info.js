@@ -59,9 +59,9 @@ return view.extend({
 			let sArray = [];
 			if(set && Array.isArray(set.nftables) && set.nftables.length > 1) {
 				set.nftables.forEach(e => {
-					if(e.set && Array.isArray(e.set.elem)) {
+					if(e && e.set && Array.isArray(e.set.elem)) {
 						e.set.elem.forEach(i => {
-							if(i.elem) {
+							if(i && i.elem) {
 								sArray.push([ i.elem.val, i.elem.expires ]);
 							};
 						});
@@ -73,12 +73,13 @@ return view.extend({
 
 		if(Array.isArray(rules.nftables) && rules.nftables.length > 1) {
 			for(let i of rules.nftables) {
-				if(!i.rule) {
+				if(!i || !i.rule) {
 					continue;
 				};
 				let set, bytes;
 				if(Array.isArray(i.rule.expr)) {
 					i.rule.expr.forEach(e => {
+						if(!e) return;
 						if(e.match && e.match.left && e.match.left.payload &&
 							typeof(e.match.right) === 'string') {
 						set = e.match.right.replace('@', '');
@@ -105,7 +106,7 @@ return view.extend({
 				if(i && Array.isArray(i.nftables)) {
 					let name;
 					i.nftables.forEach(e => {
-						if(e.set) {
+						if(e && e.set) {
 							name = e.set.name;
 						};
 					});
@@ -121,7 +122,7 @@ return view.extend({
 		let lines   = `<tr class="tr"><td class="td center">${_('No entries available...')}</td></tr>`;
 		let ipTable = E('table', { 'id': 'ipTable', 'class': 'table' });
 
-		let entries = Array.isArray(ipDataArray) ? ipDataArray.slice() : [];
+		let entries = Array.isArray(ipDataArray) ? ipDataArray.filter(e => Array.isArray(e) && e.length >= 2) : [];
 		entries.sort((a, b) => a[1] - b[1]);
 
 		if(entries.length > 0) {
@@ -165,10 +166,12 @@ return view.extend({
 
 	pollInfo() {
 		return fs.exec_direct(tools.execPath, [ 'html-info' ], 'json').catch(e => {
-			ui.addNotification(null, E('p', _('Unable to execute or read contents')
-				+ ': %s [ %s ]'.format(e.message, tools.execPath)
-			));
-			poll.stop();
+			if(!this.pollErrorShown) {
+				ui.addNotification(null, E('p', _('Unable to execute or read contents')
+					+ ': %s [ %s ]'.format(e.message, tools.execPath)
+				));
+				this.pollErrorShown = true;
+			};
 		}).then(data => {
 			if(!data) {
 				return;
@@ -177,11 +180,12 @@ return view.extend({
 			try {
 				data = JSON.parse(data);
 			} catch(e) {};
+			this.pollErrorShown = false;
 
 			if(data.status === 'enabled') {
 				let date = document.getElementById('last_blacklist_update.date');
 
-				if(data.last_blacklist_update.status) {
+				if(data.last_blacklist_update && data.last_blacklist_update.status) {
 					if(date) {
 						date.textContent = data.last_blacklist_update.date;
 					};
@@ -235,10 +239,6 @@ return view.extend({
 					rdbTableWrapper.innerHTML = '';
 					rdbTableWrapper.append(this.makeDnsmasqTable(nft_data.dnsmasq_bypass || [], _('Dnsmasq bypass')));
 				};
-			} else {
-				if(poll.active()) {
-					poll.stop();
-				};
 			};
 		});
 	},
@@ -279,7 +279,7 @@ return view.extend({
 			if(data.status === 'enabled') {
 				update_status = E('table', { 'class': 'table' });
 
-				if(data.last_blacklist_update.status) {
+				if(data.last_blacklist_update && data.last_blacklist_update.status) {
 					update_status.append(
 						E('tr', { 'class': 'tr' }, [
 							E('td', { 'class': 'td left', 'style': 'width:33%' },
@@ -317,9 +317,10 @@ return view.extend({
 					);
 				};
 
-				if(data.user_entries && data.user_entries.length > 0) {
+				if(Array.isArray(data.user_entries) && data.user_entries.length > 0) {
 					user_entries = E('table', { 'class': 'table' });
 					for(let i of data.user_entries) {
+						if(!i || typeof i.id !== 'string') continue;
 						user_entries.append(
 							E('tr', { 'class': 'tr' }, [
 								E('td', { 'class': 'td left', 'style': 'word-wrap:break-word' },

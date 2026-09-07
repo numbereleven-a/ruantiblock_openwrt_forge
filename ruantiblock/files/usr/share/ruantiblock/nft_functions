@@ -102,21 +102,21 @@ NftRouteStatus() {
 
 NftAddBaseChains() {
     local _chain_prio_first=$1 _chain_prio_local=$2 _chain_prio_fproxy=$3
-    $NFT_CMD add chain $NFT_TABLE "$NFT_LOCAL_CLIENTS_CHAIN" { type route hook output priority ${_chain_prio_local}\; policy accept\; }
-    $NFT_CMD add chain $NFT_TABLE "$NFT_BLLIST_CHAIN"
-    $NFT_CMD add chain $NFT_TABLE "$NFT_FPROXY_CHAIN" { type filter hook prerouting priority ${_chain_prio_fproxy}\; policy accept\; }
-    $NFT_CMD add chain $NFT_TABLE "$NFT_ALLOWED_HOSTS_CHAIN" { type filter hook prerouting priority ${_chain_prio_first}\; policy accept\; }
-    NftCmdWrapper $NFT_CMD add rule $NFT_TABLE "$NFT_FPROXY_CHAIN" meta iif lo return
-    NftCmdWrapper $NFT_CMD add rule $NFT_TABLE "$NFT_FPROXY_CHAIN" ip daddr "@${NFTSET_FPROXY_LOCAL}" return
-    NftCmdWrapper $NFT_CMD add rule $NFT_TABLE "$NFT_ALLOWED_HOSTS_CHAIN" meta iif lo return
+    $NFT_CMD add chain $NFT_TABLE "$NFT_LOCAL_CLIENTS_CHAIN" { type route hook output priority ${_chain_prio_local}\; policy accept\; } || return 1
+    $NFT_CMD add chain $NFT_TABLE "$NFT_BLLIST_CHAIN" || return 1
+    $NFT_CMD add chain $NFT_TABLE "$NFT_FPROXY_CHAIN" { type filter hook prerouting priority ${_chain_prio_fproxy}\; policy accept\; } || return 1
+    $NFT_CMD add chain $NFT_TABLE "$NFT_ALLOWED_HOSTS_CHAIN" { type filter hook prerouting priority ${_chain_prio_first}\; policy accept\; } || return 1
+    NftCmdWrapper $NFT_CMD add rule $NFT_TABLE "$NFT_FPROXY_CHAIN" meta iif lo return || return 1
+    NftCmdWrapper $NFT_CMD add rule $NFT_TABLE "$NFT_FPROXY_CHAIN" ip daddr "@${NFTSET_FPROXY_LOCAL}" return || return 1
+    NftCmdWrapper $NFT_CMD add rule $NFT_TABLE "$NFT_ALLOWED_HOSTS_CHAIN" meta iif lo return || return 1
     if [ "$IGNORE_LOCAL_IP" = "1" ]; then
-        NftCmdWrapper $NFT_CMD add rule $NFT_TABLE "$NFT_ALLOWED_HOSTS_CHAIN" ip daddr "@${NFTSET_LOCAL_IP}" return
+        NftCmdWrapper $NFT_CMD add rule $NFT_TABLE "$NFT_ALLOWED_HOSTS_CHAIN" ip daddr "@${NFTSET_LOCAL_IP}" return || return 1
     fi
-    NftCmdWrapper $NFT_CMD add rule $NFT_TABLE "$NFT_ALLOWED_HOSTS_CHAIN" "$NFT_ALLOWED_HOSTS_PATTERN"
+    NftCmdWrapper $NFT_CMD add rule $NFT_TABLE "$NFT_ALLOWED_HOSTS_CHAIN" "$NFT_ALLOWED_HOSTS_PATTERN" || return 1
     if [ "$BYPASS_MODE" = "1" ]; then
         for _set in "$NFTSET_BYPASS_IP" "$NFTSET_BYPASS_FQDN"
         do
-            NftCmdWrapper $NFT_CMD add rule $NFT_TABLE "$NFT_BLLIST_CHAIN" ip daddr "@${_set}" counter accept
+            NftCmdWrapper $NFT_CMD add rule $NFT_TABLE "$NFT_BLLIST_CHAIN" ip daddr "@${_set}" counter accept || return 1
         done
     fi
 }
@@ -134,9 +134,9 @@ NftDeleteBaseChains() {
 
 NftAddActionChains() {
     local _chain_prio_action=$1
-    $NFT_CMD add chain $NFT_TABLE "$NFT_ACTION_FILTER_CHAIN" { type filter hook prerouting priority ${_chain_prio_action}\; policy accept\; }
-    $NFT_CMD add chain $NFT_TABLE "$NFT_ACTION_NAT_CHAIN" { type nat hook prerouting priority ${_chain_prio_action}\; policy accept\; }
-    $NFT_CMD add chain $NFT_TABLE "$NFT_ACTION_NAT_LOCAL_CHAIN" { type nat hook output priority ${_chain_prio_action}\; policy accept\; }
+    $NFT_CMD add chain $NFT_TABLE "$NFT_ACTION_FILTER_CHAIN" { type filter hook prerouting priority ${_chain_prio_action}\; policy accept\; } || return 1
+    $NFT_CMD add chain $NFT_TABLE "$NFT_ACTION_NAT_CHAIN" { type nat hook prerouting priority ${_chain_prio_action}\; policy accept\; } || return 1
+    $NFT_CMD add chain $NFT_TABLE "$NFT_ACTION_NAT_LOCAL_CHAIN" { type nat hook output priority ${_chain_prio_action}\; policy accept\; } || return 1
 }
 
 NftDeleteActionChains() {
@@ -183,43 +183,43 @@ NftInstanceAdd() {
         _nft_dnsmasq_rule_target="${NFT_MARK_CHAIN}${_name}"
     fi
 
-    $NFT_CMD add chain $NFT_TABLE "${NFT_MARK_CHAIN}${_name}"
-    $NFT_CMD add chain $NFT_TABLE "${NFT_DNSMASQ_TIMEOUT_UPDATE_CHAIN}${_name}"
-    NftCmdWrapper $NFT_CMD add rule $NFT_TABLE "${NFT_DNSMASQ_TIMEOUT_UPDATE_CHAIN}${_name}" ct state new set update ip daddr "@${NFTSET_DNSMASQ}${_name}"
-    NftCmdWrapper $NFT_CMD add rule $NFT_TABLE "${NFT_DNSMASQ_TIMEOUT_UPDATE_CHAIN}${_name}" jump "${NFT_MARK_CHAIN}${_name}"
+    $NFT_CMD add chain $NFT_TABLE "${NFT_MARK_CHAIN}${_name}" || return 1
+    $NFT_CMD add chain $NFT_TABLE "${NFT_DNSMASQ_TIMEOUT_UPDATE_CHAIN}${_name}" || return 1
+    NftCmdWrapper $NFT_CMD add rule $NFT_TABLE "${NFT_DNSMASQ_TIMEOUT_UPDATE_CHAIN}${_name}" ct state new set update ip daddr "@${NFTSET_DNSMASQ}${_name}" || return 1
+    NftCmdWrapper $NFT_CMD add rule $NFT_TABLE "${NFT_DNSMASQ_TIMEOUT_UPDATE_CHAIN}${_name}" jump "${NFT_MARK_CHAIN}${_name}" || return 1
 
     if [ "$_proxy_mode" = "3" ]; then
         if [ "$_t_proxy_type" = "1" ]; then
-            NftCmdWrapper $NFT_CMD add rule $NFT_TABLE "$NFT_ACTION_FILTER_CHAIN" meta l4proto tcp meta mark $_pkts_mark tproxy to ":${_t_proxy_port_tcp}" comment \""$_inst"\"
+            NftCmdWrapper $NFT_CMD add rule $NFT_TABLE "$NFT_ACTION_FILTER_CHAIN" meta l4proto tcp meta mark $_pkts_mark tproxy to ":${_t_proxy_port_tcp}" comment \""$_inst"\" || return 1
             if [ "$_t_proxy_allow_udp" = "1" ]; then
-                NftCmdWrapper $NFT_CMD add rule $NFT_TABLE "$NFT_ACTION_FILTER_CHAIN" meta l4proto udp meta mark $_pkts_mark tproxy to ":${_t_proxy_port_udp}" comment \""$_inst"\"
+                NftCmdWrapper $NFT_CMD add rule $NFT_TABLE "$NFT_ACTION_FILTER_CHAIN" meta l4proto udp meta mark $_pkts_mark tproxy to ":${_t_proxy_port_udp}" comment \""$_inst"\" || return 1
             fi
         else
-            NftCmdWrapper $NFT_CMD add rule $NFT_TABLE "$NFT_ACTION_NAT_CHAIN" meta l4proto tcp meta mark $_pkts_mark redirect to ":${_t_proxy_port_tcp}" comment \""$_inst"\"
-            NftCmdWrapper $NFT_CMD add rule $NFT_TABLE "$NFT_ACTION_NAT_LOCAL_CHAIN" meta l4proto tcp meta mark $_pkts_mark redirect to ":${_t_proxy_port_tcp}" comment \""$_inst"\"
+            NftCmdWrapper $NFT_CMD add rule $NFT_TABLE "$NFT_ACTION_NAT_CHAIN" meta l4proto tcp meta mark $_pkts_mark redirect to ":${_t_proxy_port_tcp}" comment \""$_inst"\" || return 1
+            NftCmdWrapper $NFT_CMD add rule $NFT_TABLE "$NFT_ACTION_NAT_LOCAL_CHAIN" meta l4proto tcp meta mark $_pkts_mark redirect to ":${_t_proxy_port_tcp}" comment \""$_inst"\" || return 1
             if [ "$_t_proxy_allow_udp" = "1" ]; then
-                NftCmdWrapper $NFT_CMD add rule $NFT_TABLE "$NFT_ACTION_NAT_CHAIN" meta l4proto udp meta mark $_pkts_mark redirect to ":${_t_proxy_port_udp}" comment \""$_inst"\"
-                NftCmdWrapper $NFT_CMD add rule $NFT_TABLE "$NFT_ACTION_NAT_LOCAL_CHAIN" meta l4proto udp meta mark $_pkts_mark redirect to ":${_t_proxy_port_udp}" comment \""$_inst"\"
+                NftCmdWrapper $NFT_CMD add rule $NFT_TABLE "$NFT_ACTION_NAT_CHAIN" meta l4proto udp meta mark $_pkts_mark redirect to ":${_t_proxy_port_udp}" comment \""$_inst"\" || return 1
+                NftCmdWrapper $NFT_CMD add rule $NFT_TABLE "$NFT_ACTION_NAT_LOCAL_CHAIN" meta l4proto udp meta mark $_pkts_mark redirect to ":${_t_proxy_port_udp}" comment \""$_inst"\" || return 1
             fi
         fi
     elif [ "$_proxy_mode" != "2" ]; then
-        NftCmdWrapper $NFT_CMD add rule $NFT_TABLE "$NFT_ACTION_NAT_CHAIN" meta l4proto tcp meta mark $_pkts_mark redirect to ":${_tor_trans_port}" comment \""$_inst"\"
-        NftCmdWrapper $NFT_CMD add rule $NFT_TABLE "$NFT_ACTION_NAT_LOCAL_CHAIN" meta l4proto tcp meta mark $_pkts_mark redirect to ":${_tor_trans_port}" comment \""$_inst"\"
+        NftCmdWrapper $NFT_CMD add rule $NFT_TABLE "$NFT_ACTION_NAT_CHAIN" meta l4proto tcp meta mark $_pkts_mark redirect to ":${_tor_trans_port}" comment \""$_inst"\" || return 1
+        NftCmdWrapper $NFT_CMD add rule $NFT_TABLE "$NFT_ACTION_NAT_LOCAL_CHAIN" meta l4proto tcp meta mark $_pkts_mark redirect to ":${_tor_trans_port}" comment \""$_inst"\" || return 1
     fi
 
-    NftCmdWrapper $NFT_CMD add rule $NFT_TABLE "${NFT_MARK_CHAIN}${_name}" mark set $_pkts_mark
+    NftCmdWrapper $NFT_CMD add rule $NFT_TABLE "${NFT_MARK_CHAIN}${_name}" mark set $_pkts_mark || return 1
     if [ "$_proxy_mode" != "2" -a "$_proxy_mode" != "3" ]; then
-        NftInstanceMatchRule "$_client_filter" "$_name" "$NFT_BLLIST_CHAIN" ip daddr "@${NFTSET_ONION}${_name}" counter goto "${NFT_MARK_CHAIN}${_name}" comment \""$_inst"\"
+        NftInstanceMatchRule "$_client_filter" "$_name" "$NFT_BLLIST_CHAIN" ip daddr "@${NFTSET_ONION}${_name}" counter goto "${NFT_MARK_CHAIN}${_name}" comment \""$_inst"\" || return 1
     fi
     if [ "$_enable_fproxy" = "1" ]; then
-        NftInstanceMatchRule "$_client_filter" "$_name" "$NFT_FPROXY_CHAIN" ip saddr "@${NFTSET_FPROXY}${_name}" counter goto "${NFT_MARK_CHAIN}${_name}" comment \""$_inst"\"
+        NftInstanceMatchRule "$_client_filter" "$_name" "$NFT_FPROXY_CHAIN" ip saddr "@${NFTSET_FPROXY}${_name}" counter goto "${NFT_MARK_CHAIN}${_name}" comment \""$_inst"\" || return 1
     fi
 
     for _set in "${NFTSET_CIDR}${_name}" "${NFTSET_IP}${_name}"
     do
-        NftInstanceMatchRule "$_client_filter" "$_name" "$NFT_BLLIST_CHAIN" ip daddr "@${_set}" counter goto "${NFT_MARK_CHAIN}${_name}" comment \""$_inst"\"
+        NftInstanceMatchRule "$_client_filter" "$_name" "$NFT_BLLIST_CHAIN" ip daddr "@${_set}" counter goto "${NFT_MARK_CHAIN}${_name}" comment \""$_inst"\" || return 1
     done
-    NftInstanceMatchRule "$_client_filter" "$_name" "$NFT_BLLIST_CHAIN" ip daddr "@${NFTSET_DNSMASQ}${_name}" counter goto "$_nft_dnsmasq_rule_target" comment \""$_inst"\"
+    NftInstanceMatchRule "$_client_filter" "$_name" "$NFT_BLLIST_CHAIN" ip daddr "@${NFTSET_DNSMASQ}${_name}" counter goto "$_nft_dnsmasq_rule_target" comment \""$_inst"\" || return 1
 
     if [ "$_proxy_mode" = "2" ]; then
         NftRouteAdd vpn $_route_table_id $_pkts_mark "$_if_vpn" "$_vpn_gw_ip"
@@ -228,7 +228,7 @@ NftInstanceAdd() {
     fi
 
     if [ "$_enable_bllist_proxy" = "1" ]; then
-        NftCmdWrapper $NFT_CMD add rule $NFT_TABLE "$NFT_LOCAL_CLIENTS_CHAIN" ip daddr "@${NFTSET_BLLIST_PROXY}${_name}" counter goto "${NFT_MARK_CHAIN}${_name}" comment \""$_inst"\"
+        NftCmdWrapper $NFT_CMD add rule $NFT_TABLE "$NFT_LOCAL_CLIENTS_CHAIN" ip daddr "@${NFTSET_BLLIST_PROXY}${_name}" counter goto "${NFT_MARK_CHAIN}${_name}" comment \""$_inst"\" || return 1
     fi
 }
 

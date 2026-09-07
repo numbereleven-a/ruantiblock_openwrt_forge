@@ -50,6 +50,11 @@ jobs:
       - name: Check failure recovery
         run: bash tests/failure-regression.sh "$PWD/ruantiblock/files" "$(mktemp -d)"
 
+      - name: Check nft apply and statistics handling
+        run: |
+          bash tests/application-regression.sh "$PWD/ruantiblock/files" "$(mktemp -d)"
+          node tests/statistics-regression.cjs luci-app-ruantiblock/htdocs/luci-static/resources/view/ruantiblock/info.js
+
       - name: Download and verify OpenWrt SDK
         env:
           SDK_FILE: ${{ matrix.sdk_file }}
