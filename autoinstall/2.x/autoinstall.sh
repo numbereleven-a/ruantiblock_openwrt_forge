@@ -10,11 +10,9 @@ LUCI_APP=1
 HTTPS_DNS_PROXY=1
 
 OWRT_VERSION="24.10"
-RUAB_VERSION="2.1.12-r3"
-RUAB_MOD_LUA_VERSION="2.1.12-r3"
-RUAB_LUCI_APP_VERSION="2.1.12-r4"
-BASE_URL="https://raw.githubusercontent.com/gSpotx2f/packages-openwrt/master"
-PKG_DIR="/tmp"
+RUAB_VERSION="2.1.20-r3"
+RELEASE_BASE_URL="https://github.com/numbereleven-a/ruantiblock_openwrt_forge/releases/download/${RUAB_VERSION}"
+PKG_DIR=""
 
 if [ -n "$1" ]; then
     OWRT_VERSION="$1"
@@ -23,10 +21,11 @@ fi
 ### URLs
 
 ### packages
-URL_RUAB_PKG="${BASE_URL}/${OWRT_VERSION}/ruantiblock_${RUAB_VERSION}_all.ipk"
-URL_MOD_LUA_PKG="${BASE_URL}/${OWRT_VERSION}/ruantiblock-mod-lua_${RUAB_MOD_LUA_VERSION}_all.ipk"
-URL_LUCI_APP_PKG="${BASE_URL}/${OWRT_VERSION}/luci-app-ruantiblock_${RUAB_LUCI_APP_VERSION}_all.ipk"
-URL_LUCI_APP_RU_PKG="${BASE_URL}/${OWRT_VERSION}/luci-i18n-ruantiblock-ru_${RUAB_LUCI_APP_VERSION}_all.ipk"
+case "$OWRT_VERSION" in
+    23.05*|24.10*) ARCHIVE_NAME="ruantiblock-${RUAB_VERSION}-openwrt-23.05-24.10-ipk.zip" ;;
+    *) echo "Unsupported OpenWrt version: ${OWRT_VERSION}" >&2; exit 1 ;;
+esac
+URL_RELEASE_ARCHIVE="${RELEASE_BASE_URL}/${ARCHIVE_NAME}"
 ### tor
 URL_TORRC="https://raw.githubusercontent.com/gSpotx2f/ruantiblock_openwrt/master/tor/etc/tor/torrc"
 
@@ -38,10 +37,10 @@ EXEC_DIR="${PREFIX}/usr/bin"
 BACKUP_DIR_BASE="${CONFIG_DIR}/autoinstall.bak"
 BACKUP_DIR="${BACKUP_DIR_BASE}.$(date +%s)"
 ### packages
-FILE_RUAB_PKG="${PKG_DIR}/ruantiblock_${RUAB_VERSION}_all.ipk"
-FILE_MOD_LUA_PKG="${PKG_DIR}/ruantiblock-mod-lua_${RUAB_MOD_LUA_VERSION}_all.ipk"
-FILE_LUCI_APP_PKG="${PKG_DIR}/luci-app-ruantiblock_${RUAB_LUCI_APP_VERSION}_all.ipk"
-FILE_LUCI_APP_RU_PKG="${PKG_DIR}/luci-i18n-ruantiblock-ru_${RUAB_LUCI_APP_VERSION}_all.ipk"
+FILE_RUAB_PKG=""
+FILE_MOD_LUA_PKG=""
+FILE_LUCI_APP_PKG=""
+FILE_LUCI_APP_RU_PKG=""
 ### ruantiblock
 FILE_CONFIG="${CONFIG_DIR}/ruantiblock.conf"
 FILE_FQDN_FILTER="${CONFIG_DIR}/fqdn_filter"
@@ -62,7 +61,7 @@ if [ $? -ne 0 ]; then
     echo " Error! wget doesn't exists" >&2
     exit 1
 fi
-WGET_PARAMS="--no-check-certificate -q -O "
+WGET_PARAMS="-q -O "
 OPKG_CMD="$(which opkg)"
 if [ $? -ne 0 ]; then
     echo " Error! opkg doesn't exists" >&2
@@ -112,6 +111,27 @@ DlFile() {
         exit 1
     fi
     echo "Downloading ${1}"
+}
+
+PrepareReleasePackages() {
+    local _archive
+    command -v unzip >/dev/null 2>&1 || InstallPackages "unzip"
+    command -v unzip >/dev/null 2>&1 || return 1
+    command -v sha256sum >/dev/null 2>&1 || return 1
+    PKG_DIR=$(mktemp -d /tmp/ruantiblock-autoinstall.XXXXXX) || return 1
+    _archive="${PKG_DIR}/${ARCHIVE_NAME}"
+    DlFile "$URL_RELEASE_ARCHIVE" "$_archive" || return 1
+    unzip -q "$_archive" -d "$PKG_DIR" || return 1
+    [ -f "${PKG_DIR}/SHA256SUMS" ] || return 1
+    (cd "$PKG_DIR" && sha256sum -c SHA256SUMS) || return 1
+    FILE_RUAB_PKG="${PKG_DIR}/ruantiblock_${RUAB_VERSION}_all.ipk"
+    FILE_MOD_LUA_PKG="${PKG_DIR}/ruantiblock-mod-lua_${RUAB_VERSION}_all.ipk"
+    FILE_LUCI_APP_PKG="${PKG_DIR}/luci-app-ruantiblock_${RUAB_VERSION}_all.ipk"
+    set -- "${PKG_DIR}"/luci-i18n-ruantiblock-ru_*_all.ipk
+    [ "$#" -eq 1 ] && [ -f "$1" ] || return 1
+    FILE_LUCI_APP_RU_PKG="$1"
+    [ -f "$FILE_RUAB_PKG" ] && [ -f "$FILE_MOD_LUA_PKG" ] &&
+        [ -f "$FILE_LUCI_APP_PKG" ] || return 1
 }
 
 BackupFile() {
@@ -174,8 +194,7 @@ InstallPackages() {
 InstallBaseConfig() {
     _return_code=1
     InstallPackages "dnsmasq-full" "kmod-nft-tproxy"
-    RemoveFile "$FILE_RUAB_PKG" > /dev/null
-    DlFile "$URL_RUAB_PKG" "$FILE_RUAB_PKG" && $OPKG_CMD install "$FILE_RUAB_PKG" > /dev/null
+    $OPKG_CMD install "$FILE_RUAB_PKG" > /dev/null
     _return_code=$?
     AppStop
     return $_return_code
@@ -227,17 +246,14 @@ InstallTorConfig() {
 
 InstallLuaModule() {
     InstallPackages "lua" "luasocket" "luasec" "luabitop"
-    RemoveFile "$FILE_MOD_LUA_PKG" > /dev/null
-    DlFile "$URL_MOD_LUA_PKG" "$FILE_MOD_LUA_PKG" && $OPKG_CMD install "$FILE_MOD_LUA_PKG"
+    $OPKG_CMD install "$FILE_MOD_LUA_PKG"
     $UCI_CMD set ruantiblock.config.bllist_module="/usr/libexec/ruantiblock/ruab_parser.lua"
     $UCI_CMD commit ruantiblock
 }
 
 InstallLuciApp() {
-    RemoveFile "$FILE_LUCI_APP_PKG" > /dev/null
-    RemoveFile "$FILE_LUCI_APP_RU_PKG" > /dev/null
-    DlFile "$URL_LUCI_APP_PKG" "$FILE_LUCI_APP_PKG" && $OPKG_CMD install "$FILE_LUCI_APP_PKG" && \
-    DlFile "$URL_LUCI_APP_RU_PKG" "$FILE_LUCI_APP_RU_PKG" && $OPKG_CMD install "$FILE_LUCI_APP_RU_PKG"
+    $OPKG_CMD install "$FILE_LUCI_APP_PKG" && \
+    $OPKG_CMD install "$FILE_LUCI_APP_RU_PKG"
     rm -f /tmp/luci-modulecache/* /tmp/luci-indexcache*
     /etc/init.d/rpcd restart
     /etc/init.d/uhttpd restart
@@ -392,9 +408,12 @@ ConfirmBlacklist
 ConfirmLuciApp
 ConfirmHttpsDnsProxy
 ConfirmProcessing
-AppStop
 PrintBold "Updating packages list..."
 UpdatePackagesList
+InstallPackages "ca-bundle"
+PrintBold "Downloading and verifying release packages..."
+PrepareReleasePackages || exit 1
+AppStop
 PrintBold "Saving current configuration..."
 #BackupCurrentConfig
 PrintBold "Installing basic configuration..."

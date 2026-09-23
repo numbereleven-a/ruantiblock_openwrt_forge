@@ -13,6 +13,10 @@ bash tests/failure-regression.sh "$PWD/ruantiblock/files" "$(mktemp -d)"
 bash tests/application-regression.sh "$PWD/ruantiblock/files" "$(mktemp -d)"
 bash tests/workflow-regression.sh "$PWD"
 node tests/statistics-regression.cjs luci-app-ruantiblock/htdocs/luci-static/resources/view/ruantiblock/info.js
+python3 tests/parser-regression.py
+lua5.1 tests/parser-regression.lua ruantiblock-mod-lua/files/usr/libexec/ruantiblock/ruab_parser.lua
+bash tests/autoinstall-regression.sh "$PWD" ipk /path/to/ipk-release.zip "$(mktemp -d)"
+bash tests/autoinstall-regression.sh "$PWD" apk /path/to/apk-release.zip "$(mktemp -d)"
 ```
 
 The runtime shell script takes a package filesystem root, a fresh writable fixture directory, and an optional `1` to enable kernel nftables checks. For installed OpenWrt files, the filesystem root is `/` and the script runs with BusyBox ash. Runtime kernel checks require root and create only the `inet rb_review_217` test table, without hook chains; an existing table with that name causes the test to stop. The test table is removed on exit. Fixture files remain available for inspection.
@@ -34,3 +38,7 @@ sudo unshare -n bash tests/application-regression.sh "$PWD/ruantiblock/files" "$
 The statistics checks run the packaged LuCI view in Node.js with RPC, DOM and polling substitutes. They cover missing update metadata, incomplete nft and user-list entries, preserved valid counters, continued global polling after an error or disabled status, and notification suppression until a successful response. They do not establish browser rendering or live RPC compatibility.
 
 The release workflow runs the failure, application (without kernel access) and statistics checks before building packages. Kernel checks must be run separately; they are not router end-to-end tests.
+
+The parser checks use synthetic IPv4/CIDR entries and an exact-threshold case. The Lua check loads the parser definitions without invoking its network-backed main section.
+
+The autoinstall checks use a supplied release archive, substitute the download and package manager, verify archive checksums, and confirm that the expected package files are selected without touching a router.

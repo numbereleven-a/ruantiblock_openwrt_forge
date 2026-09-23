@@ -262,6 +262,7 @@ fi
 export IP_CMD
 USER_ENTRIES_PARSER="${MODULES_DIR}/ruab_parser_user_entries"
 ROUTE_CHECK_EXEC="${MODULES_DIR}/ruab_route_check"
+ROUTE_CHECK_PID_FILE="/var/run/ruab_route_check.pid"
 export IP_DATA_FILE="${DATA_DIR}/${NAME}.ip"
 export IP_DATA_FILE_BYPASS="${DATA_DIR}/${NAME}_bypass.ip"
 export IP_DATA_FILE_USER_INSTANCES="${DATA_DIR}/${NAME}_user_instances.ip"
@@ -1356,6 +1357,16 @@ MakeToken() {
     date +%s > "$TOKEN_FILE"
 }
 
+EnsureVpnRouteMonitor() {
+    if [ "$VPN_ROUTE_CHECK" = "1" -a -x "$ROUTE_CHECK_EXEC" ] &&
+        [ "$PROXY_MODE" = "2" -o -n "$USER_INSTANCES_VPN" ]; then
+        if ! PidFileActive "$ROUTE_CHECK_PID_FILE"; then
+            ClearStalePidFile "$ROUTE_CHECK_PID_FILE"
+            "$ROUTE_CHECK_EXEC" start &> /dev/null &
+        fi
+    fi
+}
+
 CheckDnsmasqConfDir() {
     if [ ! -d "$DNSMASQ_CONFDIR" ]; then
         echo " Error! DNSMASQ_CONFDIR (${DNSMASQ_CONFDIR}) does not exists" >&2
@@ -1455,9 +1466,7 @@ Start() {
             MakeToken
             return $_return_code
         fi
-        if [ "$VPN_ROUTE_CHECK" = "1" -a -x "$ROUTE_CHECK_EXEC" ] && [ "$PROXY_MODE" = "2" -o -n "$USER_INSTANCES_VPN" ]; then
-            $ROUTE_CHECK_EXEC start &> /dev/null &
-        fi
+        EnsureVpnRouteMonitor
         MakeInstancesCache
         ### Post-start script
         [ -x "$POST_START_SCRIPT" ] && $POST_START_SCRIPT &
@@ -1519,6 +1528,7 @@ Reload() {
         DeleteNftRules &> /dev/null
         AddNftRules &> /dev/null
         UpdateLocalIpSets
+        EnsureVpnRouteMonitor
         MakeToken
     else
         echo " ${NAME} does not running" >&2

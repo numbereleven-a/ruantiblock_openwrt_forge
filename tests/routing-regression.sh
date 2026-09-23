@@ -12,6 +12,7 @@ load_function() { eval "$(sed -n "/^${2}() {/,/^}/p" "$1")"; }
 load_function "$ROOT/usr/share/ruantiblock/user_instances_common" MainInstanceNeedsVpnRouteCheck
 load_function "$ROOT/usr/libexec/ruantiblock/ruab_route_check" GetVpnRouteStatus
 load_function "$ROOT/usr/libexec/ruantiblock/ruab_route_check" Main
+load_function "$ROOT/usr/bin/ruantiblock" EnsureVpnRouteMonitor
 load_function "$ROOT/etc/init.d/ruantiblock" get_dnsmasq_confdir
 
 PROXY_MODE=2 BLLIST_PRESET='' BLLIST_MODULE='' ENABLE_FPROXY=1
@@ -43,6 +44,7 @@ IncludeUserInstanceVars() {
 }
 CheckIfaceStatus() { [ -n "$1" ] && [ "$1" != tun-down ]; }
 VpnRouteInstanceStatus() { [ "$ROUTES_READY" = 1 ]; }
+SetUserInstancesItems() { :; }
 sleep() { rm -f "$PID_FILE"; }
 run_monitor() {
     : > "$PID_FILE"
@@ -73,5 +75,34 @@ check full-proxy-main-route-recovered grep -q '^reload$' "$ROUTE_LOG"
 USER_INSTANCES_VPN_FNAMES='tun-down'
 run_monitor
 check main-recovered-despite-user-vpn-down grep -q '^reload$' "$ROUTE_LOG"
+SetUserInstancesItems() { USER_INSTANCES_VPN_FNAMES="$LIVE_VPN_INSTANCES"; }
+PROXY_MODE=3 ROUTES_READY=1 LIVE_VPN_INSTANCES='list1'
+GetVpnRouteStatus
+check monitor-initial-instance test "$USER_INSTANCES_VPN_FNAMES" = 'list1'
+LIVE_VPN_INSTANCES='list1 list2'
+GetVpnRouteStatus
+check monitor-added-instance-after-reload test "$USER_INSTANCES_VPN_FNAMES" = 'list1 list2'
+LIVE_VPN_INSTANCES='list2'
+GetVpnRouteStatus
+check monitor-removed-instance-after-reload test "$USER_INSTANCES_VPN_FNAMES" = 'list2'
+ROUTE_CHECK_EXEC="$WORK/route-monitor"
+ROUTE_CHECK_PID_FILE="$WORK/route-monitor.pid"
+printf '#!/bin/sh\nprintf "%%s\\n" "$1" >> "$ROUTE_LOG"\n' > "$ROUTE_CHECK_EXEC"
+chmod +x "$ROUTE_CHECK_EXEC"
+VPN_ROUTE_CHECK=1 PROXY_MODE=3 USER_INSTANCES_VPN=''
+: > "$ROUTE_LOG"
+PidFileActive() { test -e "$ROUTE_CHECK_PID_FILE"; }
+ClearStalePidFile() { :; }
+EnsureVpnRouteMonitor
+wait
+check no-monitor-without-vpn test ! -s "$ROUTE_LOG"
+USER_INSTANCES_VPN='list2'
+EnsureVpnRouteMonitor
+wait
+check monitor-starts-for-first-vpn grep -q '^start$' "$ROUTE_LOG"
+: > "$ROUTE_CHECK_PID_FILE"
+EnsureVpnRouteMonitor
+wait
+check monitor-not-duplicated test "$(wc -l < "$ROUTE_LOG")" -eq 1
 printf 'FAILED=%s\n' "$FAILED"
 test "$FAILED" -eq 0

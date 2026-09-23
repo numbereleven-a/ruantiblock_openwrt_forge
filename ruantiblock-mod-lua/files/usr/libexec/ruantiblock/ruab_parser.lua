@@ -410,13 +410,26 @@ function BlackListParser:get_subnet(ip)
     return ip:match("^(%d+%.%d+%.%d+%.)%d+$")
 end
 
+local function valid_ipv4(ip)
+    local a, b, c, d = ip:match("^(%d+)%.(%d+)%.(%d+)%.(%d+)$")
+    if not a then
+        return false
+    end
+    for _, octet in ipairs({a, b, c, d}) do
+        if (#octet > 1 and octet:sub(1, 1) == "0") or tonumber(octet) > 255 then
+            return false
+        end
+    end
+    return true
+end
+
 function BlackListParser:ip_value_processing(value)
     if value and value ~= "" then
-        for ip_entry in value:gmatch(self.ip_pattern .. "/?%d?%d?") do
+        for ip_entry in value:gmatch(self.ip_pattern .. "/?%d*") do
             if self.BLLIST_IP_EXCLUDED_ENABLE and self.BLLIST_IP_EXCLUDED_ITEMS[ip_entry] then
             else
                 if not self.BLLIST_IP_FILTER or (self.BLLIST_IP_FILTER and not self:check_filter(ip_entry, self.BLLIST_IP_FILTER_PATTERNS, self.BLLIST_IP_FILTER_TYPE)) then
-                    if ip_entry:match("^" .. self.ip_pattern .. "$") and not self.ip_table[ip_entry] then
+                    if ip_entry:match("^" .. self.ip_pattern .. "$") and valid_ipv4(ip_entry) and not self.ip_table[ip_entry] then
                         local subnet = self:get_subnet(ip_entry)
                         if subnet and (self.BLLIST_GR_EXCLUDED_NETS_PATTERNS[subnet] or ((not self.BLLIST_IP_LIMIT or self.BLLIST_IP_LIMIT == 0) or (not self.ip_subnet_table[subnet] or self.ip_subnet_table[subnet] < self.BLLIST_IP_LIMIT))) then
                             self.ip_table[ip_entry] = subnet
@@ -424,8 +437,11 @@ function BlackListParser:ip_value_processing(value)
                             self.ip_count = self.ip_count + 1
                         end
                     elseif ip_entry:match("^" .. self.cidr_pattern .. "$") and not self.cidr_table[ip_entry] then
-                        self.cidr_table[ip_entry] = true
-                        self.cidr_count = self.cidr_count + 1
+                        local address, prefix = ip_entry:match("^([^/]+)/(%d+)$")
+                        if valid_ipv4(address) and tonumber(prefix) <= 32 then
+                            self.cidr_table[ip_entry] = true
+                            self.cidr_count = self.cidr_count + 1
+                        end
                     end
                 end
             end
@@ -565,7 +581,7 @@ function BlackListParser:run()
         self.BLLIST_ORG_EXCLUDED_ITEMS = t
     end
     if self:download_files(self.url) then
-        if (self.fqdn_count + self.ip_count + self.cidr_count) > self.BLLIST_MIN_ENTRIES then
+        if (self.fqdn_count + self.ip_count + self.cidr_count) >= self.BLLIST_MIN_ENTRIES then
             return_code = 0
         else
             return_code = 2

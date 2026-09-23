@@ -45,7 +45,7 @@ jobs:
             "$core_version" "$core_release" "$ARCHIVE_SUFFIX" >> "$GITHUB_ENV"
 
       - name: Install host tools
-        run: sudo apt-get update && sudo apt-get install --yes zstd
+        run: sudo apt-get update && sudo apt-get install --yes zstd lua5.1
 
       - name: Check failure recovery
         run: bash tests/failure-regression.sh "$PWD/ruantiblock/files" "$(mktemp -d)"
@@ -54,6 +54,12 @@ jobs:
         run: |
           bash tests/application-regression.sh "$PWD/ruantiblock/files" "$(mktemp -d)"
           node tests/statistics-regression.cjs luci-app-ruantiblock/htdocs/luci-static/resources/view/ruantiblock/info.js
+
+      - name: Check blacklist parsers and VPN monitor
+        run: |
+          python3 tests/parser-regression.py
+          lua5.1 tests/parser-regression.lua ruantiblock-mod-lua/files/usr/libexec/ruantiblock/ruab_parser.lua
+          bash tests/routing-regression.sh "$PWD/ruantiblock/files" "$(mktemp -d)"
 
       - name: Download and verify OpenWrt SDK
         env:
@@ -117,6 +123,9 @@ jobs:
           cp "${packages[@]}" "$output/"
           (cd "$output" && sha256sum * > SHA256SUMS)
           (cd "$output" && zip -9 "$GITHUB_WORKSPACE/$ARCHIVE_NAME" ./*)
+
+      - name: Check autoinstall archive
+        run: bash tests/autoinstall-regression.sh "$PWD" "${{ matrix.format }}" "$ARCHIVE_NAME" "$(mktemp -d)"
 
       - name: Upload release archive
         uses: actions/upload-artifact@v4

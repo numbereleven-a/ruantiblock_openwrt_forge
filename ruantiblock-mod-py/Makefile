@@ -5,8 +5,8 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=ruantiblock-mod-py
-PKG_VERSION:=2.1.12
-PKG_RELEASE:=5
+PKG_VERSION:=2.1.20
+PKG_RELEASE:=3
 PKG_MAINTAINER:=numbereleven-a <https://github.com/numbereleven-a/ruantiblock_openwrt_forge>
 
 include $(INCLUDE_DIR)/package.mk

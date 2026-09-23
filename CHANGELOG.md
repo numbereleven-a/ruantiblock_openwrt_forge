@@ -1,5 +1,27 @@
 # Changelog / История изменений
 
+## 2.1.20-r3 core, LuCI and parser modules
+
+Package versions: `ruantiblock`, `luci-app-ruantiblock`, `ruantiblock-mod-lua` and `ruantiblock-mod-py` — `2.1.20-r3`.
+
+### English
+
+#### Fixed
+
+- Rejected invalid IPv4 addresses and CIDR prefixes in the optional Python and Lua blacklist parsers before writing nftables data.
+- Refreshed VPN instance selection on each route-monitor check and started the monitor when the first VPN list is added on reload.
+- Accepted a blacklist with exactly the configured minimum number of entries in the Lua parser, matching Python behavior.
+- Updated IPK and APK autoinstall scripts to use the matching release archives, verify package checksums and avoid the old upstream packages.
+
+### Русский
+
+#### Исправлено
+
+- Дополнительные парсеры Python и Lua теперь отбрасывают неверные IPv4-адреса и CIDR-префиксы до записи данных для nftables.
+- VPN-монитор обновляет перечень списков перед каждой проверкой и запускается после `reload`, если добавлен первый VPN-список.
+- Lua-парсер теперь принимает список, в котором ровно заданное минимальное число записей, как и Python-парсер.
+- Установщики IPK и APK теперь берут пакеты из архивов соответствующего релиза и проверяют контрольные суммы вместо установки старых пакетов оригинального проекта.
+
 ## 2.1.19-r1 core and LuCI packages
 
 Package versions: `ruantiblock` and `luci-app-ruantiblock` — `2.1.19-r1`.

@@ -371,7 +371,13 @@ class BlackListParser(Config):
         if self.BLLIST_IP_FILTER and self._check_filter(
             value, self.BLLIST_IP_FILTER_PATTERNS, self.BLLIST_IP_FILTER_TYPE):
             return
-        if self.ip_pattern.fullmatch(value) and value not in self.ip_dict:
+        if self.ip_pattern.fullmatch(value):
+            try:
+                IPv4Address(value)
+            except AddressValueError:
+                return
+            if value in self.ip_dict:
+                return
             subnet = self._get_subnet(value)
             if subnet in self.BLLIST_GR_EXCLUDED_NETS_PATTERNS or (
                 not self.BLLIST_IP_LIMIT or (
@@ -381,6 +387,10 @@ class BlackListParser(Config):
                 self.ip_dict[value] = subnet
                 self.ip_subnet_dict[subnet] = (self.ip_subnet_dict.get(subnet) or 0) + 1
         elif self.cidr_pattern.fullmatch(value):
+            try:
+                IPv4Network(value, strict=False)
+            except (AddressValueError, NetmaskValueError):
+                return
             self.cidr_set.add(value)
 
     def _convert_to_punycode(self, string):

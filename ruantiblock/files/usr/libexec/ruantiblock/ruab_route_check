@@ -29,6 +29,7 @@ VpnRouteInstanceStatus() {
 
 GetVpnRouteStatus() {
     local _inst _i=1 _ret_val=0
+    SetUserInstancesItems
     VPN_ROUTE_RECOVERY_NEEDED=0
     for _inst in $USER_INSTANCES_VPN_FNAMES
     do
