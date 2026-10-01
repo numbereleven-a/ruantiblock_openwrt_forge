@@ -6,7 +6,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-app-ruantiblock
 PKG_VERSION:=2.1.20
-PKG_RELEASE:=3
+PKG_RELEASE:=4
 PKG_MAINTAINER:=numbereleven-a <https://github.com/numbereleven-a/ruantiblock_openwrt_forge>
 LUCI_TITLE:=LuCI support for ruantiblock
 PKG_LICENSE:=GPL-3.0-only

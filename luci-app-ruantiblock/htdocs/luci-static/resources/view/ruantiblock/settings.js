@@ -139,7 +139,7 @@ return view.extend({
 
 		load() {
 			this.readFailed = true;
-			return fs.read(this.file).catch(e => {
+			return fs.read_direct(this.file).catch(e => {
 				if(e.name === 'NotFoundError')
 					return '';
 				throw e;

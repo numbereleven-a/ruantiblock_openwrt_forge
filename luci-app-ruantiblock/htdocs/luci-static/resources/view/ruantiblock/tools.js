@@ -241,7 +241,7 @@ return baseclass.extend({
 
 		load() {
 			this.readFailed = true;
-			return fs.read(this.file).catch(e => {
+			return fs.read_direct(this.file).catch(e => {
 				if(!this.file_exists && e.name === 'NotFoundError')
 					return '';
 				throw e;

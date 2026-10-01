@@ -10,7 +10,7 @@ LUCI_APP=1
 HTTPS_DNS_PROXY=1
 
 OWRT_VERSION="25.12"
-RUAB_VERSION="2.1.20-r3"
+RUAB_VERSION="2.1.20-r4"
 RELEASE_BASE_URL="https://github.com/numbereleven-a/ruantiblock_openwrt_forge/releases/download/${RUAB_VERSION}"
 PKG_DIR=""
 

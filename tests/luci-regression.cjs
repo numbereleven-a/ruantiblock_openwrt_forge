@@ -26,11 +26,12 @@ async function check(name, callback) {
     try { await callback(); console.log('PASS ' + name); }
     catch (error) { failed++; console.error('FAIL ' + name + ': ' + error.message); }
 }
-async function editorScenario(kind, errorName, writeFails = false, required = false) {
-    let disk = 'retained.example\n';
+async function editorScenario(kind, errorName, writeFails = false, required = false, emptyFile = false) {
+    let disk = emptyFile ? '' : 'retained.example\n';
     let writes = 0, hidden = 0, callbacks = 0;
     const io = {
-        read: () => errorName ? Promise.reject(Object.assign(new Error('read failed'), { name: errorName })) : Promise.resolve(disk),
+        read: () => Promise.reject(Object.assign(new Error('No data received'), { name: 'NoDataError' })),
+        read_direct: () => errorName ? Promise.reject(Object.assign(new Error('read failed'), { name: errorName })) : Promise.resolve(disk),
         write: (file, data) => {
             writes++;
             if (writeFails) return Promise.reject(new Error('write failed'));
@@ -49,8 +50,8 @@ async function editorScenario(kind, errorName, writeFails = false, required = fa
         editor = Object.create(page.CBIBlockFileEdit);
         editor.__init__({}, {}, {}, 'list1', '/fixture/list', 'List', '', () => { callbacks++; });
     }
-    let readError;
-    try { await editor.load(); } catch (e) { readError = e; }
+    let readError, content;
+    try { content = await editor.load(); } catch (e) { readError = e; }
     if (errorName && (errorName !== 'NotFoundError' || required)) {
         // A failed read must not become a blank editor that overwrites the file.
         if (!readError) {
@@ -67,6 +68,7 @@ async function editorScenario(kind, errorName, writeFails = false, required = fa
         assert.equal(writes, 0);
     } else {
         assert.equal(readError, undefined);
+        if (emptyFile) assert.equal(kind === 'inline' ? editor.content : content, '');
         elements['widget.modal_content'] = { value: 'new.example' };
         if (kind === 'dialog') await editor.handleSave();
         else if (writeFails) await assert.rejects(editor.write('list1', 'new.example\n'));
@@ -108,9 +110,10 @@ async function pollingScenario(mode) {
 }
 (async () => {
     for (const kind of ['dialog', 'inline']) {
-        for (const error of ['PermissionError', 'TimeoutError', 'Error', 'NotFoundError', null])
+        for (const error of ['PermissionError', 'TimeoutError', 'NoDataError', 'Error', 'NotFoundError', null])
             await check(`${kind}-${error || 'successful-read'}`, () => editorScenario(kind, error));
         await check(`${kind}-failed-write`, () => editorScenario(kind, null, true));
+        await check(`${kind}-empty-file`, () => editorScenario(kind, null, false, false, true));
     }
     await check('dialog-missing-required-file', () => editorScenario('dialog', 'NotFoundError', false, true));
     for (const mode of ['poll', 'service', 'action', 'initial-token']) await check('status-' + mode, () => pollingScenario(mode));

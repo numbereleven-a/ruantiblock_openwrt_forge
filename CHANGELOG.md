@@ -1,5 +1,21 @@
 # Changelog / История изменений
 
+## 2.1.20-r4 core, LuCI and parser modules
+
+Package versions: `ruantiblock`, `luci-app-ruantiblock`, `ruantiblock-mod-lua` and `ruantiblock-mod-py` — `2.1.20-r4`.
+
+### English
+
+#### Fixed
+
+- Fixed adding user lists and opening empty files in LuCI editors when RPC returns `NoDataError`.
+
+### Русский
+
+#### Исправлено
+
+- Исправлено добавление пользовательских списков и открытие пустых файлов в редакторах LuCI, когда RPC возвращает `NoDataError`.
+
 ## 2.1.20-r3 core, LuCI and parser modules
 
 Package versions: `ruantiblock`, `luci-app-ruantiblock`, `ruantiblock-mod-lua` and `ruantiblock-mod-py` — `2.1.20-r3`.
