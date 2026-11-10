@@ -24,6 +24,8 @@ The routing model remains compatible with the original project and uses standard
 
 The package supports L3 VPNs with interface-based routing (OpenVPN, WireGuard, PPTP, sing-box in TUN mode, and others), transparent proxies with port redirection (sing-box in TProxy mode, Xray, V2Ray, Shadowsocks-libev, Redsocks, and others), and Tor. Traffic can be routed by domain names and IP addresses, with multiple VPN or proxy connections and list priorities.
 
+In transparent proxy mode, each user list can independently send TCP and UDP traffic to the proxy. TCP is enabled by default and UDP is disabled by default. Traffic for a disabled protocol can match a later list or other routing rules. These options do not control VPN mode.
+
 ### Downloads and installation
 
 Choose the package format supported by the target OpenWrt release from the [latest release](https://github.com/numbereleven-a/ruantiblock_openwrt_forge/releases/latest):

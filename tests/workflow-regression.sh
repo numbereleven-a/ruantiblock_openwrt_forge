@@ -28,6 +28,7 @@ check core-version-present test -n "$core_version"
 check core-release-present test -n "$core_release"
 check package-versions-match test "$core_version" = "$luci_version"
 check package-releases-match test "$core_release" = "$luci_release"
+check luci-displayed-version test "$(cat "$ROOT/luci-app-ruantiblock/root/usr/share/luci-app-ruantiblock/version")" = "${core_version}-r${core_release}"
 check ipk-suffix-present grep -q 'archive_suffix: openwrt-23.05-24.10-ipk' "$WORKFLOW"
 check apk-suffix-present grep -q 'archive_suffix: openwrt-25.12-apk' "$WORKFLOW"
 check workflow-derives-version grep -q "core_version=.*PKG_VERSION" "$WORKFLOW"
@@ -36,7 +37,7 @@ check translation-not-duplicated test ! -e "$ROOT/luci-app-ruantiblock/root/usr/
 
 ipk_name="ruantiblock-${core_version}-r${core_release}-openwrt-23.05-24.10-ipk.zip"
 apk_name="ruantiblock-${core_version}-r${core_release}-openwrt-25.12-apk.zip"
-check ipk-name test "$ipk_name" = 'ruantiblock-2.1.20-r4-openwrt-23.05-24.10-ipk.zip'
-check apk-name test "$apk_name" = 'ruantiblock-2.1.20-r4-openwrt-25.12-apk.zip'
+check ipk-name test "$ipk_name" = 'ruantiblock-2.1.20-r5-openwrt-23.05-24.10-ipk.zip'
+check apk-name test "$apk_name" = 'ruantiblock-2.1.20-r5-openwrt-25.12-apk.zip'
 
 exit "$FAILED"

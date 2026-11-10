@@ -157,9 +157,22 @@ NftInstanceMatchRule() {
     fi
 }
 
+# Match only enabled protocols before a list claims the packet.
+NftInstanceTrafficRule() {
+    local _filter="$1" _suffix="$2" _chain="$3" _proto
+    shift 3
+    if [ "$_traffic_protocols" = "all" ]; then
+        NftInstanceMatchRule "$_filter" "$_suffix" "$_chain" "$@"
+    else
+        for _proto in $_traffic_protocols; do
+            NftInstanceMatchRule "$_filter" "$_suffix" "$_chain" meta l4proto "$_proto" "$@" || return 1
+        done
+    fi
+}
+
 NftInstanceAdd() {
     local _inst _first_chain_type _t_proxy_statement _chain_action_type _set
-    local _client_filter="${14:-0}"
+    local _client_filter="${14:-0}" _t_proxy_allow_tcp="${15:-1}" _traffic_protocols=all
     local _name="$1" _pkts_mark="$2" _proxy_mode="$3" _tor_trans_port="$4" _route_table_id="$5" _if_vpn="$6" _t_proxy_type="$7" _t_proxy_port_tcp="$8" _t_proxy_port_udp="$9" _t_proxy_allow_udp="${10}" _enable_bllist_proxy="${11}" _enable_fproxy="${12}" _vpn_gw_ip="${13}"
     _name="${_name#\"}"; _name="${_name%\"}"
     _if_vpn="${_if_vpn#\"}"; _if_vpn="${_if_vpn%\"}"
@@ -177,6 +190,12 @@ NftInstanceAdd() {
         MakeLogRecord "debug" "nft_functions.NftInstanceAdd.args: _name=${_name} _pkts_mark=${_pkts_mark} _proxy_mode=${_proxy_mode} _tor_trans_port=${_tor_trans_port} _route_table_id=${_route_table_id} _if_vpn=${_if_vpn} _t_proxy_type=${_t_proxy_type} _t_proxy_port_tcp=${_t_proxy_port_tcp} _t_proxy_port_udp=${_t_proxy_port_udp} _t_proxy_allow_udp=${_t_proxy_allow_udp} _enable_bllist_proxy=${_enable_bllist_proxy} _enable_fproxy=${_enable_fproxy} _vpn_gw_ip=${_vpn_gw_ip}"
     fi
 
+    if [ -n "$_name" ] && [ "$_proxy_mode" = "3" ]; then
+        _traffic_protocols=""
+        [ "$_t_proxy_allow_tcp" = "1" ] && _traffic_protocols="tcp"
+        [ "$_t_proxy_allow_udp" = "1" ] && _traffic_protocols="$_traffic_protocols udp"
+    fi
+
     if [ "$NFTSET_DNSMASQ_TIMEOUT_UPDATE" = "1" ]; then
         _nft_dnsmasq_rule_target="${NFT_DNSMASQ_TIMEOUT_UPDATE_CHAIN}${_name}"
     else
@@ -190,13 +209,17 @@ NftInstanceAdd() {
 
     if [ "$_proxy_mode" = "3" ]; then
         if [ "$_t_proxy_type" = "1" ]; then
-            NftCmdWrapper $NFT_CMD add rule $NFT_TABLE "$NFT_ACTION_FILTER_CHAIN" meta l4proto tcp meta mark $_pkts_mark tproxy to ":${_t_proxy_port_tcp}" comment \""$_inst"\" || return 1
+            if [ "$_t_proxy_allow_tcp" = "1" ] || [ "$_enable_bllist_proxy" = "1" ]; then
+                NftCmdWrapper $NFT_CMD add rule $NFT_TABLE "$NFT_ACTION_FILTER_CHAIN" meta l4proto tcp meta mark $_pkts_mark tproxy to ":${_t_proxy_port_tcp}" comment \""$_inst"\" || return 1
+            fi
             if [ "$_t_proxy_allow_udp" = "1" ]; then
                 NftCmdWrapper $NFT_CMD add rule $NFT_TABLE "$NFT_ACTION_FILTER_CHAIN" meta l4proto udp meta mark $_pkts_mark tproxy to ":${_t_proxy_port_udp}" comment \""$_inst"\" || return 1
             fi
         else
-            NftCmdWrapper $NFT_CMD add rule $NFT_TABLE "$NFT_ACTION_NAT_CHAIN" meta l4proto tcp meta mark $_pkts_mark redirect to ":${_t_proxy_port_tcp}" comment \""$_inst"\" || return 1
-            NftCmdWrapper $NFT_CMD add rule $NFT_TABLE "$NFT_ACTION_NAT_LOCAL_CHAIN" meta l4proto tcp meta mark $_pkts_mark redirect to ":${_t_proxy_port_tcp}" comment \""$_inst"\" || return 1
+            if [ "$_t_proxy_allow_tcp" = "1" ] || [ "$_enable_bllist_proxy" = "1" ]; then
+                NftCmdWrapper $NFT_CMD add rule $NFT_TABLE "$NFT_ACTION_NAT_CHAIN" meta l4proto tcp meta mark $_pkts_mark redirect to ":${_t_proxy_port_tcp}" comment \""$_inst"\" || return 1
+                NftCmdWrapper $NFT_CMD add rule $NFT_TABLE "$NFT_ACTION_NAT_LOCAL_CHAIN" meta l4proto tcp meta mark $_pkts_mark redirect to ":${_t_proxy_port_tcp}" comment \""$_inst"\" || return 1
+            fi
             if [ "$_t_proxy_allow_udp" = "1" ]; then
                 NftCmdWrapper $NFT_CMD add rule $NFT_TABLE "$NFT_ACTION_NAT_CHAIN" meta l4proto udp meta mark $_pkts_mark redirect to ":${_t_proxy_port_udp}" comment \""$_inst"\" || return 1
                 NftCmdWrapper $NFT_CMD add rule $NFT_TABLE "$NFT_ACTION_NAT_LOCAL_CHAIN" meta l4proto udp meta mark $_pkts_mark redirect to ":${_t_proxy_port_udp}" comment \""$_inst"\" || return 1
@@ -209,17 +232,17 @@ NftInstanceAdd() {
 
     NftCmdWrapper $NFT_CMD add rule $NFT_TABLE "${NFT_MARK_CHAIN}${_name}" mark set $_pkts_mark || return 1
     if [ "$_proxy_mode" != "2" -a "$_proxy_mode" != "3" ]; then
-        NftInstanceMatchRule "$_client_filter" "$_name" "$NFT_BLLIST_CHAIN" ip daddr "@${NFTSET_ONION}${_name}" counter goto "${NFT_MARK_CHAIN}${_name}" comment \""$_inst"\" || return 1
+        NftInstanceTrafficRule "$_client_filter" "$_name" "$NFT_BLLIST_CHAIN" ip daddr "@${NFTSET_ONION}${_name}" counter goto "${NFT_MARK_CHAIN}${_name}" comment \""$_inst"\" || return 1
     fi
     if [ "$_enable_fproxy" = "1" ]; then
-        NftInstanceMatchRule "$_client_filter" "$_name" "$NFT_FPROXY_CHAIN" ip saddr "@${NFTSET_FPROXY}${_name}" counter goto "${NFT_MARK_CHAIN}${_name}" comment \""$_inst"\" || return 1
+        NftInstanceTrafficRule "$_client_filter" "$_name" "$NFT_FPROXY_CHAIN" ip saddr "@${NFTSET_FPROXY}${_name}" counter goto "${NFT_MARK_CHAIN}${_name}" comment \""$_inst"\" || return 1
     fi
 
     for _set in "${NFTSET_CIDR}${_name}" "${NFTSET_IP}${_name}"
     do
-        NftInstanceMatchRule "$_client_filter" "$_name" "$NFT_BLLIST_CHAIN" ip daddr "@${_set}" counter goto "${NFT_MARK_CHAIN}${_name}" comment \""$_inst"\" || return 1
+        NftInstanceTrafficRule "$_client_filter" "$_name" "$NFT_BLLIST_CHAIN" ip daddr "@${_set}" counter goto "${NFT_MARK_CHAIN}${_name}" comment \""$_inst"\" || return 1
     done
-    NftInstanceMatchRule "$_client_filter" "$_name" "$NFT_BLLIST_CHAIN" ip daddr "@${NFTSET_DNSMASQ}${_name}" counter goto "$_nft_dnsmasq_rule_target" comment \""$_inst"\" || return 1
+    NftInstanceTrafficRule "$_client_filter" "$_name" "$NFT_BLLIST_CHAIN" ip daddr "@${NFTSET_DNSMASQ}${_name}" counter goto "$_nft_dnsmasq_rule_target" comment \""$_inst"\" || return 1
 
     if [ "$_proxy_mode" = "2" ]; then
         NftRouteAdd vpn $_route_table_id $_pkts_mark "$_if_vpn" "$_vpn_gw_ip"

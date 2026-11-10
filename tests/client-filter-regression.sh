@@ -38,12 +38,47 @@ check source-set-created grep -q 'add set ip rb_clients_test clients.test' "$WOR
 check multiple-clients-loaded grep -q 'clients.test { 192.0.2.1,192.0.2.2 }' "$WORK/commands"
 : > "$WORK/commands"
 NftInstanceAdd test 0 3 9040 0 lo 1 1604 1604 1 1 1 '' 1
-check restricted-dns-rule grep -q 'blacklist ip saddr @clients.test ip daddr @d.test' "$WORK/commands"
-check restricted-cidr-rule grep -q 'blacklist ip saddr @clients.test ip daddr @c.test' "$WORK/commands"
-check restricted-ip-rule grep -q 'blacklist ip saddr @clients.test ip daddr @i.test' "$WORK/commands"
-check restricted-full-proxy grep -q 'fproxy_chain ip saddr @clients.test ip saddr @fproxy.test' "$WORK/commands"
+check restricted-dns-rule grep -q 'blacklist ip saddr @clients.test meta l4proto tcp ip daddr @d.test' "$WORK/commands"
+check restricted-cidr-rule grep -q 'blacklist ip saddr @clients.test meta l4proto tcp ip daddr @c.test' "$WORK/commands"
+check restricted-ip-rule grep -q 'blacklist ip saddr @clients.test meta l4proto tcp ip daddr @i.test' "$WORK/commands"
+check restricted-full-proxy grep -q 'fproxy_chain ip saddr @clients.test meta l4proto tcp ip saddr @fproxy.test' "$WORK/commands"
 check download-proxy-independent grep -q 'local_clients ip daddr @bproxy.test' "$WORK/commands"
 check selected-tproxy-port-preserved grep -q 'tproxy to :1604' "$WORK/commands"
+check missing-tcp-option-enabled grep -q 'meta l4proto tcp meta mark 0 tproxy' "$WORK/commands"
+check both-protocols-enabled grep -q 'meta l4proto udp ip daddr @d.test' "$WORK/commands"
+# Disabled protocols must not claim a destination before later lists can match.
+no_tcp() { ! grep -q 'meta l4proto tcp' "$WORK/commands"; }
+no_udp() { ! grep -q 'meta l4proto udp' "$WORK/commands"; }
+: > "$WORK/commands"
+NftInstanceAdd test 8 3 9040 0 lo 1 1604 1605 1 0 1 '' 1 0
+check udp-only-no-tcp no_tcp
+check udp-only-destination grep -q 'meta l4proto udp ip daddr @d.test' "$WORK/commands"
+check udp-only-full-proxy grep -q 'meta l4proto udp ip saddr @fproxy.test' "$WORK/commands"
+check udp-only-tproxy grep -q 'meta l4proto udp meta mark 8 tproxy to :1605' "$WORK/commands"
+: > "$WORK/commands"
+NftInstanceAdd test 8 3 9040 0 lo 1 1604 1605 1 1 0 '' 0 0
+check udp-only-download-tcp-action grep -q 'meta l4proto tcp meta mark 8 tproxy to :1604' "$WORK/commands"
+check udp-only-download-proxy-rule grep -q 'local_clients ip daddr @bproxy.test' "$WORK/commands"
+no_tcp_list_match() { ! grep -q 'blacklist meta l4proto tcp' "$WORK/commands"; }
+check udp-only-download-does-not-select-tcp-list no_tcp_list_match
+: > "$WORK/commands"
+NftInstanceAdd test 8 3 9040 0 lo 0 1604 1605 1 1 0 '' 0 0
+check udp-only-download-redirect-local grep -q 'action_nat_local meta l4proto tcp meta mark 8 redirect to :1604' "$WORK/commands"
+check udp-only-download-redirect-does-not-select-tcp-list no_tcp_list_match
+: > "$WORK/commands"
+NftInstanceAdd test 8 3 9040 0 lo 0 1604 1605 0 0 0 '' 0 1
+check tcp-only-no-udp no_udp
+check tcp-only-redirect grep -q 'meta l4proto tcp meta mark 8 redirect to :1604' "$WORK/commands"
+: > "$WORK/commands"
+NftInstanceAdd test 8 3 9040 0 lo 0 1604 1605 1 0 0 '' 0 0
+check udp-only-redirect-no-tcp no_tcp
+check udp-only-redirect grep -q 'meta l4proto udp meta mark 8 redirect to :1605' "$WORK/commands"
+: > "$WORK/commands"
+NftInstanceAdd test 8 3 9040 0 lo 1 1604 1605 0 0 0 '' 0 0
+check neither-no-tcp no_tcp
+check neither-no-udp no_udp
+no_destination() { ! grep -q 'blacklist .*@d.test' "$WORK/commands"; }
+check neither-no-list-match no_destination
 : > "$WORK/commands"
 NftInstanceAdd test 0 1 9040 0 lo 0 1604 1604 0 0 0 '' 1
 check restricted-onion-rule grep -q 'blacklist ip saddr @clients.test ip daddr @o.test' "$WORK/commands"
@@ -77,7 +112,7 @@ if [ "$REAL" != 0 ]; then
     done
     MakeInstanceNftSets test '' '192.0.2.1 192.0.2.2'
     NftInstanceAdd test 0 3 9040 0 lo 1 1604 1604 1 1 1 '' 1
-    check kernel-accepted-source-rule sh -c 'nft list chain ip rb_clients_test blacklist | grep -q "ip saddr @clients.test ip daddr @d.test"'
+    check kernel-accepted-source-rule sh -c 'nft list chain ip rb_clients_test blacklist | grep -q "ip saddr @clients.test meta l4proto tcp ip daddr @d.test"'
     # Rules for other transports must compile with the same source restriction.
     MakeInstanceNftSets tor '' ''
     NftInstanceAdd tor 0 1 9040 0 lo 0 1604 1604 0 0 0 '' 1

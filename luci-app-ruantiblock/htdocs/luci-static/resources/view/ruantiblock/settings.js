@@ -789,6 +789,13 @@ return view.extend({
 		o.description = _('Statement in nftables rules');
 		o.modalonly   = true;
 
+		// U_T_PROXY_ALLOW_TCP
+		o = ss.taboption('u_tproxy_tab', form.Flag, 'u_t_proxy_allow_tcp',
+			_('Send TCP traffic to transparent proxy'));
+		o.rmempty   = false;
+		o.default   = 1;
+		o.modalonly = true;
+
 		// U_T_PROXY_PORT_TCP
 		o = ss.taboption('u_tproxy_tab', form.Value, 'u_t_proxy_port_tcp',
 			_('Transparent proxy TCP port'));

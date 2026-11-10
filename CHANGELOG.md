@@ -1,5 +1,21 @@
 # Changelog / История изменений
 
+## 2.1.20-r5 core, LuCI and parser modules
+
+Package versions: `ruantiblock`, `luci-app-ruantiblock`, `ruantiblock-mod-lua` and `ruantiblock-mod-py` — `2.1.20-r5`.
+
+### English
+
+#### Added
+
+- Added independent TCP and UDP selection for user lists in transparent proxy mode. TCP remains enabled by default.
+
+### Русский
+
+#### Добавлено
+
+- Добавлен независимый выбор TCP и UDP для пользовательских списков в режиме прозрачного прокси. По умолчанию TCP включён.
+
 ## 2.1.20-r4 core, LuCI and parser modules
 
 Package versions: `ruantiblock`, `luci-app-ruantiblock`, `ruantiblock-mod-lua` and `ruantiblock-mod-py` — `2.1.20-r4`.
