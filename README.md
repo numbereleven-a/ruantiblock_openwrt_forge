@@ -50,4 +50,6 @@ Optional packages:
 
 Prepare the required OpenWrt dependencies as described in the [original project Wiki](https://github.com/gSpotx2f/ruantiblock_openwrt/wiki), copy the matching packages to the router, and install the required pair.
 
+After manually installing or upgrading the packages, check whether Ruantiblock is enabled at boot; autostart may be disabled. Enable it in LuCI under System → Startup or run `/etc/init.d/ruantiblock enable`. Check its status with `/etc/init.d/ruantiblock enabled`. The autoinstaller enables autostart automatically.
+
 `SHA256SUMS` is published as a separate release asset for package verification. Installation and upgrade commands are included in the release description.
