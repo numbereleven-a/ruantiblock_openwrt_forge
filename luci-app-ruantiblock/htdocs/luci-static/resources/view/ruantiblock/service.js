@@ -16,6 +16,8 @@ const btn_style_warning  = 'btn cbi-button-negative important'
 
 return view.extend({
 	statusTokenValue: null,
+	actionInProgress: false,
+	actionSeq       : 0,
 
 	callServicesList: rpc.declare({
 		object: 'service',
@@ -121,8 +123,7 @@ return view.extend({
 				if(this.dnsmasqCfgDirsSelect.value !== this.currentDnsmasqCfgDir) {
 					uci.set(tools.appName, 'config', 'dnsmasq_confdir',
 							this.dnsmasqCfgDirsSelect.value);
-					uci.save();
-					uci.apply();
+					return uci.save().then(() => uci.apply());
 				};
 			}).finally(() => {
 				this.cancelButton.disabled = false;
@@ -288,7 +289,7 @@ return view.extend({
 			vpn_route_diagnostic)
 		);
 
-		if(!poll.active()) {
+		if(!this.actionInProgress && !poll.active()) {
 			poll.start();
 		};
 	},
@@ -299,6 +300,7 @@ return view.extend({
 			this.disableButtons(true, elem);
 		};
 
+		this.actionInProgress = true;
 		poll.stop();
 
 		return tools.handleServiceAction(tools.appName, action).then(() => {
@@ -310,6 +312,7 @@ return view.extend({
 				}
 			);
 		}).finally(() => {
+			this.actionInProgress = false;
 			this.statusTokenValue = null;
 			poll.start();
 		});
@@ -321,11 +324,13 @@ return view.extend({
 			this.disableButtons(true, elem);
 		};
 
+		this.actionInProgress = true;
+		let seq = ++this.actionSeq;
 		poll.stop();
 
 		if(action === 'update') {
 			this.getAppStatus().then(status_array => {
-				if(status_array) {
+				if(status_array && this.actionSeq === seq && this.actionInProgress) {
 					this.setAppStatus(status_array, [], 4);
 				};
 			});
@@ -340,6 +345,7 @@ return view.extend({
 				}
 			);
 		}).finally(() => {
+			this.actionInProgress = false;
 			this.statusTokenValue = null;
 			poll.start();
 		});

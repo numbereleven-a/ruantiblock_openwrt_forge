@@ -17,6 +17,7 @@ DNSMASQ_DATA_FILE="/tmp/dnsmasq*.d/02-ruantiblock.dnsmasq"
 DNSMASQ_DATA_FILE_TMP="${DNSMASQ_DATA_FILE}.tmp"
 DNSMASQ_DATA_FILE_BYPASS="/tmp/dnsmasq*.d/00-ruantiblock_bypass.dnsmasq"
 DNSMASQ_DATA_FILE_USER_INSTANCES="/tmp/dnsmasq*.d/01-ruantiblock_user_instances.dnsmasq"
+DNSMASQ_DATA_FILE_NFTSETS="/tmp/dnsmasq*.d/03-ruantiblock_nftsets.dnsmasq"
 SCRIPTS_DIR="/usr/share/ruantiblock"
 MODULES_DIR="/usr/libexec/ruantiblock"
 ### ruantiblock
@@ -108,9 +109,11 @@ RemovePackages() {
 }
 
 RestoreTorConfig() {
-    [ -e "${FILE_TORRC}.bak" ] && mv -f "${FILE_TORRC}.bak" "$FILE_TORRC"
+    local _latest_bak
+    _latest_bak=$(ls -1t "${FILE_TORRC}.bak"* 2>/dev/null | head -n 1)
+    [ -n "$_latest_bak" ] && [ -e "$_latest_bak" ] && mv -f "$_latest_bak" "$FILE_TORRC"
     if [ -x "/etc/init.d/tor" ]; then
-        if $(/etc/init.d/tor enabled); then
+        if /etc/init.d/tor enabled; then
             /etc/init.d/tor restart
         fi
     fi
@@ -133,9 +136,10 @@ RemoveAppFiles() {
     RemoveFile "${FILE_IP_FILTER}.apk-new"
     RemoveFile "${FILE_USER_ENTRIES}.apk-new"
     RemoveFile "${FILE_BYPASS_ENTRIES}.apk-new"
-    rm -f "$DNSMASQ_DATA_FILE"
-    rm -f "$DNSMASQ_DATA_FILE_BYPASS"
-    rm -f "$DNSMASQ_DATA_FILE_USER_INSTANCES"
+    rm -f $DNSMASQ_DATA_FILE $DNSMASQ_DATA_FILE_TMP
+    rm -f $DNSMASQ_DATA_FILE_BYPASS ${DNSMASQ_DATA_FILE_BYPASS}.tmp
+    rm -f $DNSMASQ_DATA_FILE_USER_INSTANCES ${DNSMASQ_DATA_FILE_USER_INSTANCES}.tmp
+    rm -f $DNSMASQ_DATA_FILE_NFTSETS ${DNSMASQ_DATA_FILE_NFTSETS}.tmp
     rm -rf "$DATA_DIR"/*
     rm -rf "$USER_LISTS_DIR"
     rmdir "$SCRIPTS_DIR" "$MODULES_DIR" 2> /dev/null
@@ -155,7 +159,7 @@ ConfirmRemove() {
     read _reply
     case $_reply in
         y|Y|"")
-            break
+            :
         ;;
         n|N|q|Q)
             printf "Bye...\n"; exit 0

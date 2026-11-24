@@ -402,9 +402,9 @@ return view.extend({
 
 		o = s.taboption('main_blacklist_tab', form.SectionValue, 'config', form.NamedSection,
 			'config');
-		s.anonymous = true;
-		s.addremove = false;
 		ss = o.subsection;
+		ss.anonymous = true;
+		ss.addremove = false;
 
 
 		/* Main settings tab */
@@ -846,8 +846,9 @@ return view.extend({
 			// U_ENABLE_ENTRIES_REMOTE_PROXY
 			o = s.taboption('u_entries_tab', form.Flag, 'u_enable_entries_remote_proxy',
 				_('Downloading files via proxy'), _('Turn on if files are blocked'));
-			o.rmempty = false;
-			o.default = 0;
+			o.rmempty   = false;
+			o.default   = 0;
+			o.modalonly = true;
 
 			// U_ENTRIES_DNS
 			o = s.taboption('u_entries_tab', form.Value, 'u_entries_dns',

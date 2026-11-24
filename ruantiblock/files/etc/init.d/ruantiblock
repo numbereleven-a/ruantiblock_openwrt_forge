@@ -64,7 +64,7 @@ start() {
 	# user entries; do not launch a second update from Start().
 	RUAB_DEFER_REMOTE_UPDATE="$_update_at_startup" $APP_EXEC start
 	if [ $? -eq 0 -a "$_update_at_startup" = "1" ]; then
-		$APP_EXEC update > /dev/null &
+		$APP_EXEC update </dev/null >/dev/null 2>&1 &
 	fi
 }
 

@@ -193,8 +193,8 @@ class Config:
     def makeIPv4Network(s):
         net = None
         try:
-            net = IPv4Network(s)
-        except (AddressValueError, NetmaskValueError):
+            net = IPv4Network(s, strict=False)
+        except (AddressValueError, NetmaskValueError, ValueError):
             pass
         return net
 
@@ -229,8 +229,8 @@ class Config:
     def check_cidr_overlap(self, ip):
         if self.BLLIST_CIDR_EXCLUDED_ITEMS:
             try:
-                ip_obj = IPv4Network(ip)
-            except (AddressValueError, NetmaskValueError):
+                ip_obj = IPv4Network(ip, strict=False)
+            except (AddressValueError, NetmaskValueError, ValueError):
                 pass
             else:
                 for net in self.BLLIST_CIDR_EXCLUDED_ITEMS:
@@ -388,19 +388,18 @@ class BlackListParser(Config):
                 self.ip_subnet_dict[subnet] = (self.ip_subnet_dict.get(subnet) or 0) + 1
         elif self.cidr_pattern.fullmatch(value):
             try:
-                IPv4Network(value, strict=False)
-            except (AddressValueError, NetmaskValueError):
+                net = IPv4Network(value, strict=False)
+            except (AddressValueError, NetmaskValueError, ValueError):
                 return
-            self.cidr_set.add(value)
+            self.cidr_set.add(net.with_prefixlen)
 
     def _convert_to_punycode(self, string):
         if self.cyr_pattern.search(string):
             if self.BLLIST_ENABLE_IDN:
                 try:
-                    string = string.encode("idna").decode(
-                        self.site_encoding or self.default_site_encoding)
+                    string = string.encode("idna").decode("ascii")
                 except UnicodeError:
-                    pass
+                    raise FieldValueError()
             else:
                 raise FieldValueError()
         return string
@@ -525,7 +524,7 @@ class Summarize:
 
     @staticmethod
     def _sort_net_func(e):
-        return IPv4Network(e)
+        return IPv4Network(e, strict=False)
 
     @classmethod
     def _group_nets(cls, cidr_list, raw_list=None):
@@ -536,7 +535,7 @@ class Summarize:
         start = end = curr_super_net = None
         nets = 1
         for net in cidr_list:
-            net_obj = IPv4Network(net)
+            net_obj = IPv4Network(net, strict=False)
             prefix_len = net_obj.prefixlen
             if prefix_len == 24:
                 address = net_obj.network_address
@@ -647,9 +646,11 @@ class OptimizeConfig(Config):
         for i in self.parsers_list:
             self.cidr_set |= i.cidr_set
             self.ip_dict.update(i.ip_dict)
-            self.ip_subnet_dict.update(i.ip_subnet_dict)
+            for subnet, count in i.ip_subnet_dict.items():
+                self.ip_subnet_dict[subnet] = self.ip_subnet_dict.get(subnet, 0) + count
             self.fqdn_dict.update(i.fqdn_dict)
-            self.sld_dict.update(i.sld_dict)
+            for sld, count in i.sld_dict.items():
+                self.sld_dict[sld] = self.sld_dict.get(sld, 0) + count
         self._exclude_nets()
         self._remove_subdomains()
         self._optimize_fqdn_dict()
@@ -663,7 +664,8 @@ class WriteConfigFiles(Config):
         self.write_buffer = -1
 
     def write_ipset_config(self, ip_dict, cidr_set):
-        with open(self.IP_DATA_FILE, "wt", buffering=self.write_buffer) as file_handler:
+        tmp_file = f"{self.IP_DATA_FILE}.tmp"
+        with open(tmp_file, "wt", buffering=self.write_buffer) as file_handler:
             for i in (self.NFTSET_CIDR, self.NFTSET_IP):
                 file_handler.write("flush set {} {}\n".format(self.NFT_TABLE, i))
             file_handler.write(
@@ -683,19 +685,24 @@ class WriteConfigFiles(Config):
                     file_handler.write(f"{i},")
                 file_handler.write("};")
             file_handler.write("}\n}\n")
+        os.replace(tmp_file, self.IP_DATA_FILE)
 
     def write_dnsmasq_config(self, fqdn_dict):
-        with open(self.DNSMASQ_DATA_FILE, "wt", buffering=self.write_buffer) as file_handler:
+        tmp_file = f"{self.DNSMASQ_DATA_FILE}.tmp"
+        with open(tmp_file, "wt", buffering=self.write_buffer) as file_handler:
             for fqdn in fqdn_dict:
                 file_handler.write(
                     f"server=/{fqdn}/{self.BLLIST_ALT_DNS_ADDR}\nnftset=/{fqdn}/{self.NFT_TABLE_DNSMASQ}#{self.NFTSET_DNSMASQ}\n"
                     if self.BLLIST_ALT_NSLOOKUP else
                     f"nftset=/{fqdn}/{self.NFT_TABLE_DNSMASQ}#{self.NFTSET_DNSMASQ}\n")
+        os.replace(tmp_file, self.DNSMASQ_DATA_FILE)
 
     def write_update_status_file(self, ip_count, cidr_count, fqdn_count):
-        with open(self.UPDATE_STATUS_FILE, "wt") as file_handler:
+        tmp_file = f"{self.UPDATE_STATUS_FILE}.tmp"
+        with open(tmp_file, "wt") as file_handler:
             file_handler.write(
                 f"{cidr_count} {ip_count} {fqdn_count}")
+        os.replace(tmp_file, self.UPDATE_STATUS_FILE)
 
 
 class RblHybrid(BlackListParser):
@@ -704,7 +711,8 @@ class RblHybrid(BlackListParser):
         self.url = self.RBL_ALL_URL
         self.records_separator = '{"appearDate": '
         self.ips_separator = ", "
-        self.entry_regexp = re.compile(r'"domains": \["?(.*?)"?\].*?"ips": \[([a-f0-9/.:", ]*)\]')
+        self.entry_regexp = re.compile(r'"domains": \[(.*?)\].*?"ips": \[([a-f0-9/.:", ]*)\]')
+        self.domain_item_regexp = re.compile(r'"([^"]+)"')
         self.org_value_regexp = re.compile(r'"name": "(.*?)"')
 
     def parser_func(self):
@@ -716,14 +724,15 @@ class RblHybrid(BlackListParser):
                     if not res:
                         continue
                     ip_string = res.group(2).replace('"', "")
-                    fqdn_string = res.group(1)
-                    if fqdn_string:
+                    domains = self.domain_item_regexp.findall(res.group(1))
+                    matched = False
+                    for fqdn_string in domains:
                         try:
                             self.fqdn_value_processing(fqdn_string)
+                            matched = True
                         except FieldValueError:
-                            for i in ip_string.split(self.ips_separator):
-                                self.ip_value_processing(i)
-                    else:
+                            pass
+                    if not matched:
                         for i in ip_string.split(self.ips_separator):
                             self.ip_value_processing(i)
 
@@ -759,8 +768,7 @@ class RblFQDN(RblHybrid):
                     res = self.entry_regexp.search(entry)
                     if not res:
                         continue
-                    fqdn_string = res.group(1)
-                    if fqdn_string:
+                    for fqdn_string in self.domain_item_regexp.findall(res.group(1)):
                         try:
                             self.fqdn_value_processing(fqdn_string)
                         except FieldValueError:
@@ -967,6 +975,7 @@ class Ra(BlackListParser):
     def download_config(self, url, cfg_file):
         self.url = url
         file_handler = None
+        wrote_file = False
         for chunk in self._download_data(self.url[0]):
             if chunk:
                 if not file_handler:
@@ -976,19 +985,39 @@ class Ra(BlackListParser):
                         break
                 if file_handler:
                     file_handler.write(chunk)
+                    wrote_file = True
         if file_handler:
             file_handler.close()
-        file_handler = None
+        return wrote_file
 
     def run(self):
         ret_value = 0
-        self.download_config(self.url_ipset, self.IP_DATA_FILE)
-        self.download_config(self.url_dnsmasq, self.DNSMASQ_DATA_FILE)
-        self.download_config(self.url_stat, self.UPDATE_STATUS_FILE)
+        tmp_files = (
+            (f"{self.IP_DATA_FILE}.tmp", self.IP_DATA_FILE),
+            (f"{self.DNSMASQ_DATA_FILE}.tmp", self.DNSMASQ_DATA_FILE),
+            (f"{self.UPDATE_STATUS_FILE}.tmp", self.UPDATE_STATUS_FILE),
+        )
+        for tmp_path, _ in tmp_files:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+        ok = (
+            self.download_config(self.url_ipset, tmp_files[0][0])
+            and self.download_config(self.url_dnsmasq, tmp_files[1][0])
+            and self.download_config(self.url_stat, tmp_files[2][0])
+        )
+        if not ok:
+            ret_value = 2
         for i in self.http_codes:
-           if i != 200:
+            if i != 200:
                 ret_value = 2
                 break
+        if ret_value == 0:
+            for tmp_path, dst_path in tmp_files:
+                os.replace(tmp_path, dst_path)
+        else:
+            for tmp_path, _ in tmp_files:
+                if os.path.exists(tmp_path):
+                    os.remove(tmp_path)
         self.http_codes = set()
         return ret_value
 

@@ -373,9 +373,17 @@ function BlackListParser:new(t)
     return instance
 end
 
+local function shell_quote_single(value)
+    return "'" .. tostring(value):gsub("'", "'\\''") .. "'"
+end
+
 function BlackListParser:encoding_iconv(input, from, to)
     local output
-    local handler = assert(io.popen('printf \'%s\' \'' .. input .. '\' | ' .. self.ICONV_CMD .. ' -f "' .. from .. '" -t "' .. to .. '"', 'r'))
+    local cmd = 'printf \'%s\' ' .. shell_quote_single(input)
+        .. ' | ' .. self.ICONV_CMD
+        .. ' -f ' .. shell_quote_single(from)
+        .. ' -t ' .. shell_quote_single(to)
+    local handler = assert(io.popen(cmd, 'r'))
     output = handler:read("*a")
     handler:close()
     return (output)
@@ -463,7 +471,7 @@ function BlackListParser:fqdn_value_processing(value)
     end
     if not self.BLLIST_FQDN_FILTER or (self.BLLIST_FQDN_FILTER and not self:check_filter(value, self.BLLIST_FQDN_FILTER_PATTERNS, self.BLLIST_FQDN_FILTER_TYPE)) then
         if value:match("^" .. self.fqdn_pattern .. "$") then
-        elseif self.BLLIST_ENABLE_IDN and value:match('^[^",%%\\/&%?]-[^",%%\\/&%?%.]+%.[^",%%\\/&%?%.]+%.?$') then
+        elseif self.BLLIST_ENABLE_IDN and value:match('^[^\'",%%\\/&%?%s;`$|<>%(%){}%[%]]-[^\'",%%\\/&%?%.%s;`$|<>%(%){}%[%]]+%.[^\'",%%\\/&%?%.%s;`$|<>%(%){}%[%]]+%.?$') then
             value = self:convert_to_punycode(value)
             if not value then
                 return false
@@ -548,7 +556,7 @@ function BlackListParser:get_http_data(url)
         end
     else
         local wget_sink = ltn12.sink.chain(self:prepare_data(), self:chunk_buffer(), self:parser_func())
-        ret_val = ltn12.pump.all(ltn12.source.file(io.popen(self.WGET_CMD .. self.wget_user_agent .. ' "' .. url .. '"', 'r')), wget_sink)
+        ret_val = ltn12.pump.all(ltn12.source.file(io.popen(self.WGET_CMD .. self.wget_user_agent .. ' ' .. shell_quote_single(url), 'r')), wget_sink)
     end
     return (ret_val == 1) and true or false
 end
@@ -844,7 +852,7 @@ function OptimizeConfig:_remove_subdomains()
         for i in pairs(v) do
             if self.fqdn_table[i] then
                 for j in pairs(v) do
-                    if (j ~= i) and j:find("." .. i, 1, true) then
+                    if (j ~= i) and (#j > #i) and j:sub(-(#i + 1)) == "." .. i then
                         self.fqdn_table[j] = nil
                     end
                 end
@@ -909,13 +917,19 @@ function OptimizeConfig:_union(t1, t2)
     return new_items
 end
 
+function OptimizeConfig:_union_sum(t1, t2)
+    for k, v in pairs(t2) do
+        t1[k] = (t1[k] or 0) + v
+    end
+end
+
 function OptimizeConfig:optimize()
     for _, i in ipairs(self.parsers_list) do
         self:_union(self.cidr_table, i.cidr_table)
         self:_union(self.ip_table, i.ip_table)
-        self:_union(self.ip_subnet_table, i.ip_subnet_table)
+        self:_union_sum(self.ip_subnet_table, i.ip_subnet_table)
         self:_union(self.fqdn_table, i.fqdn_table)
-        self:_union(self.sld_table, i.sld_table)
+        self:_union_sum(self.sld_table, i.sld_table)
     end
     if self.BLLIST_CIDR_EXCLUDED_ENABLE then
         self:_exclude_nets()
@@ -944,7 +958,8 @@ function WriteConfigFiles:new(t)
 end
 
 function WriteConfigFiles:write_ipset_config(ip_table, cidr_table)
-    local file_handler = assert(io.open(self.IP_DATA_FILE, "w"), "Could not open nftset config")
+    local tmp_file = self.IP_DATA_FILE .. ".tmp"
+    local file_handler = assert(io.open(tmp_file, "w"), "Could not open nftset config")
     for _, v in ipairs({ self.NFTSET_CIDR, self.NFTSET_IP }) do
         file_handler:write(string.format("flush set %s %s\n", self.NFT_TABLE, v))
     end
@@ -976,10 +991,12 @@ function WriteConfigFiles:write_ipset_config(ip_table, cidr_table)
     self.ip_count = i
     file_handler:write("}\n}\n")
     file_handler:close()
+    assert(os.rename(tmp_file, self.IP_DATA_FILE), "Could not replace nftset config")
 end
 
 function WriteConfigFiles:write_dnsmasq_config(fqdn_table)
-    local file_handler = assert(io.open(self.DNSMASQ_DATA_FILE, "w"), "Could not open dnsmasq config")
+    local tmp_file = self.DNSMASQ_DATA_FILE .. ".tmp"
+    local file_handler = assert(io.open(tmp_file, "w"), "Could not open dnsmasq config")
     local i = 0
     for fqdn in pairs(fqdn_table) do
         if self.BLLIST_ALT_NSLOOKUP then
@@ -990,12 +1007,15 @@ function WriteConfigFiles:write_dnsmasq_config(fqdn_table)
     end
     self.fqdn_count = i
     file_handler:close()
+    assert(os.rename(tmp_file, self.DNSMASQ_DATA_FILE), "Could not replace dnsmasq config")
 end
 
 function WriteConfigFiles:write_update_status_file()
-    local file_handler = assert(io.open(self.UPDATE_STATUS_FILE, "w"), "Could not open 'update_status' file")
+    local tmp_file = self.UPDATE_STATUS_FILE .. ".tmp"
+    local file_handler = assert(io.open(tmp_file, "w"), "Could not open 'update_status' file")
     file_handler:write(string.format("%d %d %d", self.cidr_count, self.ip_count, self.fqdn_count))
     file_handler:close()
+    assert(os.rename(tmp_file, self.UPDATE_STATUS_FILE), "Could not replace 'update_status' file")
 end
 
 -- Parser subclasses
@@ -1030,9 +1050,17 @@ local Rbl = Class(BlackListParser, {
 function Rbl:parser_func()
     return function(chunk)
         if chunk and chunk ~= "" then
-            for org_str, fqdn_str, ip_str in chunk:gmatch('"name": "(.-)".-"domains": %["?(.-)"?%].-"ips": %[([a-f0-9/.:", ]*)%].-') do
+            for org_str, domains_raw, ip_str in chunk:gmatch('"name": "(.-)".-"domains": %[(.-)%].-"ips": %[([a-f0-9/.:", ]*)%].-') do
                 if org_str == "" or not self:org_value_processing(org_str) then
-                    fqdn_parser_func(self, ip_str, fqdn_str)
+                    local matched = false
+                    for fqdn_str in domains_raw:gmatch('"([^"]+)"') do
+                        if #fqdn_str > 0 and not fqdn_str:match("^" .. self.ip_pattern .. "$") and self:fqdn_value_processing(fqdn_str) then
+                            matched = true
+                        end
+                    end
+                    if not matched then
+                        self:ip_value_processing(ip_str)
+                    end
                 end
             end
         end
@@ -1046,9 +1074,11 @@ local RblFQDN = Class(Rbl, {
 function RblFQDN:parser_func()
     return function(chunk)
         if chunk and chunk ~= "" then
-            for org_str, fqdn_str in chunk:gmatch('"name": "(.-)".-"domains": %["?(.-)"?%].-') do
+            for org_str, domains_raw in chunk:gmatch('"name": "(.-)".-"domains": %[(.-)%].-') do
                 if org_str == "" or not self:org_value_processing(org_str) then
-                    fqdn_parser_func(self, nil, fqdn_str)
+                    for fqdn_str in domains_raw:gmatch('"([^"]+)"') do
+                        fqdn_parser_func(self, nil, fqdn_str)
+                    end
                 end
             end
         end
@@ -1346,9 +1376,15 @@ end
 
 function Ra:run()
     local return_code = 1
-    if self:download_config(self.url_ipset, self.IP_DATA_FILE) then
-        if self:download_config(self.url_dnsmasq, self.DNSMASQ_DATA_FILE) then
-            if self:download_config(self.url_stat, self.UPDATE_STATUS_FILE) then
+    local ip_tmp = self.IP_DATA_FILE .. ".tmp"
+    local dns_tmp = self.DNSMASQ_DATA_FILE .. ".tmp"
+    local stat_tmp = self.UPDATE_STATUS_FILE .. ".tmp"
+    os.remove(ip_tmp)
+    os.remove(dns_tmp)
+    os.remove(stat_tmp)
+    if self:download_config(self.url_ipset, ip_tmp) then
+        if self:download_config(self.url_dnsmasq, dns_tmp) then
+            if self:download_config(self.url_stat, stat_tmp) then
                 return_code = 0
             end
         end
@@ -1358,6 +1394,15 @@ function Ra:run()
             return_code = 2
             break
         end
+    end
+    if return_code == 0 then
+        os.rename(ip_tmp, self.IP_DATA_FILE)
+        os.rename(dns_tmp, self.DNSMASQ_DATA_FILE)
+        os.rename(stat_tmp, self.UPDATE_STATUS_FILE)
+    else
+        os.remove(ip_tmp)
+        os.remove(dns_tmp)
+        os.remove(stat_tmp)
     end
     self.http_codes = {}
     return return_code

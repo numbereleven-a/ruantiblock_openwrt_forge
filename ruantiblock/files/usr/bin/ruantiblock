@@ -559,7 +559,7 @@ FlushNftSets() {
     local _set
     for _set in "$@"
     do
-        $NFT_CMD flush set $NFT_TABLE "$_set" &> /dev/null
+        $NFT_CMD flush set $NFT_TABLE "$_set" >/dev/null 2>&1
     done
 }
 
@@ -605,7 +605,7 @@ DeleteInstancesNftSets() {
             "${NFTSET_DNSMASQ}${_name}" \
             "${NFTSET_ONION}${_name}"
         do
-            $NFT_CMD delete set $NFT_TABLE "$_set" &> /dev/null
+            $NFT_CMD delete set $NFT_TABLE "$_set" >/dev/null 2>&1
         done
     done
 }
@@ -849,11 +849,8 @@ DeleteNftRules() {
     NftDeleteBaseChains
     NftInstanceDelete " "
     DeleteUserInstancesNftRules
-    if [ "$PROXY_MODE" = "2" ]; then
-        NftRouteDelete $VPN_ROUTE_TABLE_ID_START 2> /dev/null
-    elif [ "$PROXY_MODE" = "3" -a "$T_PROXY_TYPE" = "1" ]; then
-        NftRouteDelete $TPROXY_ROUTE_TABLE_ID_START 2> /dev/null
-    fi
+    NftRouteDelete $VPN_ROUTE_TABLE_ID_START 2> /dev/null
+    NftRouteDelete $TPROXY_ROUTE_TABLE_ID_START 2> /dev/null
 }
 
 SetNetConfig() {
@@ -871,8 +868,8 @@ DropNetConfig() {
 }
 
 DestroyNetConfig() {
-    $NFT_CMD flush table $NFT_TABLE &> /dev/null
-    $NFT_CMD delete table $NFT_TABLE &> /dev/null
+    $NFT_CMD flush table $NFT_TABLE >/dev/null 2>&1
+    $NFT_CMD delete table $NFT_TABLE >/dev/null 2>&1
 }
 
 CheckStatus() {
@@ -1362,7 +1359,7 @@ EnsureVpnRouteMonitor() {
         [ "$PROXY_MODE" = "2" -o -n "$USER_INSTANCES_VPN" ]; then
         if ! PidFileActive "$ROUTE_CHECK_PID_FILE"; then
             ClearStalePidFile "$ROUTE_CHECK_PID_FILE"
-            "$ROUTE_CHECK_EXEC" start &> /dev/null &
+            "$ROUTE_CHECK_EXEC" start </dev/null >/dev/null 2>&1 &
         fi
     fi
 }
@@ -1396,6 +1393,9 @@ Update() {
         GetBlacklistFiles
         _return_code=$?
         if [ $_return_code -eq 4 ]; then
+            if [ "$NFTSET_CLEAR_SETS" = "1" ]; then
+                UpdateBllistSets >/dev/null 2>&1
+            fi
             ToggleUPIDFile del
             MakeToken
             return 4
@@ -1440,13 +1440,13 @@ Start() {
     else
         echo " ${NAME} ${_arg}..."
         MakeLogRecord "info" "${_arg}..."
-        DropNetConfig &> /dev/null
-        SetNetConfig || { DropNetConfig; rm -f "$START_PID_FILE"; return 1; }
+        DropNetConfig >/dev/null 2>&1
+        SetNetConfig || { DropNetConfig; rm -f "$START_PID_FILE"; MakeToken; return 1; }
         PreStartCheck
-        AddBypassEntries || { DropNetConfig; rm -f "$START_PID_FILE"; return 1; }
+        AddBypassEntries || { DropNetConfig; rm -f "$START_PID_FILE"; MakeToken; return 1; }
         # Rebuild local user-entry files so disabled/removed instances cannot
         # leave stale dnsmasq directives or nft data behind after a restart.
-        AddUserEntries cached || { DropNetConfig; rm -f "$START_PID_FILE"; return 1; }
+        AddUserEntries cached || { DropNetConfig; rm -f "$START_PID_FILE"; MakeToken; return 1; }
         MergeDnsmasqNftsets
         if [ $? -ne 0 ]; then
             DropNetConfig
@@ -1485,10 +1485,10 @@ Stop() {
         MakeToken
         echo " ${NAME} ${_arg}..."
         MakeLogRecord "info" "${_arg}..."
-        DropNetConfig &> /dev/null
+        DropNetConfig >/dev/null 2>&1
         _return_code=$?
         if [ -x "$ROUTE_CHECK_EXEC" ]; then
-            $ROUTE_CHECK_EXEC stop &> /dev/null
+            $ROUTE_CHECK_EXEC stop >/dev/null 2>&1
         fi
         ### Post-stop script
         [ -x "$POST_STOP_SCRIPT" ] && $POST_STOP_SCRIPT &
@@ -1501,7 +1501,7 @@ Stop() {
 }
 
 Reload() {
-    local _i=0 _attempts=60
+    local _i=0 _attempts=60 _return_code=0
     if CheckStatus; then
         MakeToken
         while PidFileActive "$START_PID_FILE"
@@ -1525,13 +1525,15 @@ Reload() {
         fi
 
         echo " ${NAME} reload..."
-        DeleteNftRules &> /dev/null
-        AddNftRules &> /dev/null
-        UpdateLocalIpSets
+        DeleteNftRules >/dev/null 2>&1
+        AddNftRules >/dev/null 2>&1 || _return_code=1
+        UpdateLocalIpSets || _return_code=1
         EnsureVpnRouteMonitor
         MakeToken
+        return $_return_code
     else
         echo " ${NAME} does not running" >&2
+        return 1
     fi
 }
 
@@ -1627,9 +1629,18 @@ case "$1" in
     ;;
     delayed-start)
         case "$2" in ''|*[!0-9]*) exit 1 ;; esac
+        if [ -r "$START_PID_FILE" ]; then
+            _existing_pid=$(cat "$START_PID_FILE" 2>/dev/null)
+            case "$_existing_pid" in
+                ''|*[!0-9]*|0) ;;
+                *) kill -0 "$_existing_pid" 2>/dev/null && exit 0 ;;
+            esac
+        fi
         echo "$$" > "$START_PID_FILE"
         sleep "$2"
-        rm -f "$START_PID_FILE"
+        if [ -r "$START_PID_FILE" ] && [ "$(cat "$START_PID_FILE" 2>/dev/null)" = "$$" ]; then
+            rm -f "$START_PID_FILE"
+        fi
         Init
         Stop "stop"
         Start "start"
@@ -1644,7 +1655,7 @@ case "$1" in
     ;;
     destroy)
         Init
-        Stop "$1" &> /dev/null
+        Stop "$1" >/dev/null 2>&1
         DestroyNetConfig
         ClearDataFiles
         return_code=$?
@@ -1657,7 +1668,7 @@ case "$1" in
         if CheckStatus; then
             :
         else
-            echo " ${NAME} ${_arg} - Error! ${NAME} does not running or another error has occurred" >&2
+            echo " ${NAME} ${1} - Error! ${NAME} does not running or another error has occurred" >&2
             exit 1
         fi
         UpdateLocalIpSets
@@ -1671,13 +1682,16 @@ case "$1" in
     ;;
     blacklist-files)
         Init
-        if PidFileActive "$U_PID_FILE" && [ "$1" != "force-update" ]; then
+        if PidFileActive "$U_PID_FILE"; then
             echo " ${NAME} - Error! Another instance of update is already running" >&2
             exit 2
         else
             if CheckDnsmasqConfDir; then
+                ClearStalePidFile "$U_PID_FILE"
+                ToggleUPIDFile add
                 GetBlacklistFiles
                 return_code=$?
+                ToggleUPIDFile del
             else
                 return_code=1
             fi

@@ -1,5 +1,37 @@
 # Changelog / История изменений
 
+## 2.1.20-r6 core, LuCI and parser modules
+
+Package versions: `ruantiblock`, `luci-app-ruantiblock`, `ruantiblock-mod-lua` and `ruantiblock-mod-py` — `2.1.20-r6`.
+
+### English
+
+#### Fixed
+
+- Escaped shell arguments and tightened IDN domain validation in the Lua parser (`encoding_iconv` and `wget` fallback).
+- Filtered main-instance transparent proxy nftables rules by enabled L4 protocols so disabled UDP/ICMP traffic is not routed to `lo` in `tproxy` mode.
+- Cleaned up both main-instance policy routing tables on rule teardown and cleared stale `tproxy` loopback rules before re-adding them.
+- Prevented false `40-ruantiblock` hotplug reloads on `ifup` events with an empty device name and moved the delayed reload to the background.
+- Restored IP nftables sets when blacklist preparation fails with rollback while `nftset_clear_sets` is enabled.
+- Normalized non-strict CIDR entries, rejected invalid IDNA conversions, summed multi-parser optimization counts, supported multi-domain `rublacklist` entries, fixed Lua subdomain suffix matching, and made parser file writes atomic.
+- Fixed LuCI Statistics rule counters and labels for lists with both TCP and UDP enabled in transparent proxy mode, and kept `info_output` JSON valid when optional sets are absent or URLs contain backslashes/quotes.
+- Fixed LuCI async ordering in `service.js` (`dialogDestroy` UCI apply and `update` status refresh) and `update-checker.js`, validated `ruab_route_check` PID before stopping, and fixed `uninstall.sh` glob/torrc cleanup and `autoinstall.sh` temp-dir/cron handling.
+- Enabled service autostart by default on fresh installation, preserved autostart and cron entries across package upgrades, and added `+nftables-json` to package dependencies.
+
+### Русский
+
+#### Исправлено
+
+- Экранированы аргументы shell и усилена проверка IDN-доменов в Lua-парсере (`encoding_iconv` и fallback на `wget`).
+- В правилах nftables главного экземпляра для прозрачного прокси добавлена фильтрация по активным L4-протоколам, чтобы отключённый UDP/ICMP-трафик не уходил в `lo` в режиме `tproxy`.
+- При удалении правил очищаются обе стартовые таблицы маршрутизации главного экземпляра, а для `tproxy` старые `lo`-правила удаляются перед повторным добавлением.
+- Устранены ложные перезагрузки в hotplug-скрипте `40-ruantiblock` при `ifup` с пустым именем устройства, отложенный `reload` вынесен в фон.
+- Добавлено восстановление IP-сетов nftables после отката неудачной подготовки списков при включённом `nftset_clear_sets`.
+- В парсерах нормализованы нестрогие CIDR, запрещён пропуск невалидного IDNA в `dnsmasq`, исправлено суммирование счётчиков нескольких парсеров, добавлена обработка многодоменных записей `rublacklist`, исправлено сравнение суффикса субдоменов в Lua и сделана атомарная запись файлов.
+- Исправлены счётчики и подписи правил в статистике LuCI для списков с одновременно включёнными TCP и UDP, а также генерация валидного JSON в `info_output` при отсутствующих сетах и спецсимволах в URL.
+- Исправлены асинхронные гонки в `service.js` (`dialogDestroy` и обновление статуса при `update`) и `update-checker.js`, добавлена проверка PID перед остановкой `ruab_route_check`, исправлены `uninstall.sh` и `autoinstall.sh`.
+- Включён автозапуск службы по умолчанию при новой установке, сохранены состояние автозапуска и задания cron при обновлении пакета, добавлена зависимость `+nftables-json`.
+
 ## 2.1.20-r5 core, LuCI and parser modules
 
 Package versions: `ruantiblock`, `luci-app-ruantiblock`, `ruantiblock-mod-lua` and `ruantiblock-mod-py` — `2.1.20-r5`.
@@ -261,6 +293,7 @@ Package version:
 - Fixed cron task detection, including correct removal of its own entries and writing an empty crontab.
 - Fixed update-helper file permissions so the helpers run correctly after package installation.
 - Escaped HTML output in the dnsmasq tables on the information page.
+- Suppressed duplicate LuCI notifications for transient browser-aborted status requests and retried the initial status query.
 
 #### Security
 
@@ -285,6 +318,7 @@ Package version:
 - Исправлено распознавание заданий cron, включая корректное удаление собственных записей и запись пустого crontab.
 - Исправлены права update-helper-файлов, чтобы они корректно запускались после установки пакета.
 - Экранирован HTML-вывод таблиц dnsmasq на странице информации.
+- Убраны дублирующиеся уведомления LuCI при временном прерывании запроса статуса браузером; первоначальный запрос теперь повторяется.
 
 #### Безопасность
 

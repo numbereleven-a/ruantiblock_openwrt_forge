@@ -34,3 +34,12 @@ assert(threshold:run() == 0)
 threshold.ip_count = 0
 assert(threshold:run() == 2)
 print("PASS lua-equal-minimum-threshold")
+
+local idn_guard = Parser:new()
+idn_guard.BLLIST_ENABLE_IDN = true
+idn_guard.BLLIST_FQDN_FILTER = false
+idn_guard.BLLIST_FQDN_EXCLUDED_ENABLE = false
+idn_guard.BLLIST_STRIP_WWW = false
+idn_guard.convert_to_punycode = function() error("shell-metachar domain must be rejected") end
+assert(idn_guard:fqdn_value_processing("bad'$(id)'.ru") == false)
+print("PASS lua-idn-shell-metachar-rejected")

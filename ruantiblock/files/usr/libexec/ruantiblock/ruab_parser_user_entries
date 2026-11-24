@@ -38,9 +38,16 @@ echo | $AWK_CMD -v WGET_CMD="$WGET_CMD" -v WGET_PARAMS="$WGET_PARAMS" \
         delete fqdn_array;
         delete download_results;
     }
+    function shellEscapeDouble(str) {
+        gsub(/\\/, "\\\\", str);
+        gsub(/"/, "\\\"", str);
+        gsub(/\$/, "\\$", str);
+        gsub(/`/, "\\`", str);
+        return str;
+    };
     function makeLogRecord(level, msg) {
         if(ENABLE_LOGGING == 1) {
-            system(sprintf("%s %s -p \"user.%s\" \"%s\"", LOGGER_CMD, LOGGER_PARAMS, level, msg));
+            system(sprintf("%s %s -p \"user.%s\" \"%s\"", LOGGER_CMD, LOGGER_PARAMS, level, shellEscapeDouble(msg)));
         };
     };
     function writeIpList(array,  _str) {
@@ -124,17 +131,14 @@ echo | $AWK_CMD -v WGET_CMD="$WGET_CMD" -v WGET_PARAMS="$WGET_PARAMS" \
         download_results[length(download_results)] = sprintf("%s %s %s %s:%s",
             _cidr_num, _ip_num, _fqdn_num, U_NAME, fname);
     };
-    function downloadFile(url,  _ret_code, _wget_call, _cidr_array, _ip_array, _fqdn_array, _val, _ret) {
+    function downloadFile(url,  _ret_code, _wget_call, _escaped_url, _cidr_array, _ip_array, _fqdn_array, _val, _ret) {
         if(length(url) == 0) {
             return 1;
         };
 
         _ret_code = 1;
-        gsub(/\\/, "\\\\", url);
-        gsub(/"/, "\\\"", url);
-        gsub(/\$/, "\\$", url);
-        gsub(/`/, "\\`", url);
-        _wget_call = sprintf("%s %s - \"%s\"; printf \"\n$?\n\"", WGET_CMD, WGET_PARAMS, url);
+        _escaped_url = shellEscapeDouble(url);
+        _wget_call = sprintf("%s %s - \"%s\"; printf \"\n$?\n\"", WGET_CMD, WGET_PARAMS, _escaped_url);
 
         delete _cidr_array;
         delete _ip_array;

@@ -36,7 +36,9 @@ NftCmdWrapper() {
 NftRouteDelete() {
     local _route_table_id=$1
     $IP_CMD route flush table "$_route_table_id"
-    $IP_CMD rule del table "$_route_table_id"
+    while $IP_CMD rule del table "$_route_table_id" 2>/dev/null; do
+        :
+    done
 }
 
 NftRouteAdd() {
@@ -45,6 +47,7 @@ NftRouteAdd() {
         if [ -d "/proc/sys/net/ipv4/conf/lo" ]; then
             echo 0 > "/proc/sys/net/ipv4/conf/lo/rp_filter"
         fi
+        NftRouteDelete "$_route_table_id" 2> /dev/null
         $IP_CMD rule add fwmark "$_pkts_mark" table "$_route_table_id" priority "$LO_RULE_PRIO"
         $IP_CMD route add local default dev lo table "$_route_table_id"
 
@@ -190,7 +193,7 @@ NftInstanceAdd() {
         MakeLogRecord "debug" "nft_functions.NftInstanceAdd.args: _name=${_name} _pkts_mark=${_pkts_mark} _proxy_mode=${_proxy_mode} _tor_trans_port=${_tor_trans_port} _route_table_id=${_route_table_id} _if_vpn=${_if_vpn} _t_proxy_type=${_t_proxy_type} _t_proxy_port_tcp=${_t_proxy_port_tcp} _t_proxy_port_udp=${_t_proxy_port_udp} _t_proxy_allow_udp=${_t_proxy_allow_udp} _enable_bllist_proxy=${_enable_bllist_proxy} _enable_fproxy=${_enable_fproxy} _vpn_gw_ip=${_vpn_gw_ip}"
     fi
 
-    if [ -n "$_name" ] && [ "$_proxy_mode" = "3" ]; then
+    if [ "$_proxy_mode" = "3" ]; then
         _traffic_protocols=""
         [ "$_t_proxy_allow_tcp" = "1" ] && _traffic_protocols="tcp"
         [ "$_t_proxy_allow_udp" = "1" ] && _traffic_protocols="$_traffic_protocols udp"
@@ -275,6 +278,6 @@ NftListBllistChainJson() {
 }
 
 NftReturnStatus() {
-    $NFT_CMD -c add rule $NFT_TABLE "$NFT_ALLOWED_HOSTS_CHAIN" continue &> /dev/null
+    $NFT_CMD -c add rule $NFT_TABLE "$NFT_ALLOWED_HOSTS_CHAIN" continue >/dev/null 2>&1
     return $?
 }

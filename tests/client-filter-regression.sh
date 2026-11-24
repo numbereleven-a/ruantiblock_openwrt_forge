@@ -80,6 +80,10 @@ check neither-no-udp no_udp
 no_destination() { ! grep -q 'blacklist .*@d.test' "$WORK/commands"; }
 check neither-no-list-match no_destination
 : > "$WORK/commands"
+NftInstanceAdd "\" \"" 8 3 9040 201 lo 1 1100 1100 0 0 0 ''
+check main-tproxy-tcp-only-match grep -q 'blacklist meta l4proto tcp ip daddr @d' "$WORK/commands"
+check main-tproxy-tcp-only-no-udp no_udp
+: > "$WORK/commands"
 NftInstanceAdd test 0 1 9040 0 lo 0 1604 1604 0 0 0 '' 1
 check restricted-onion-rule grep -q 'blacklist ip saddr @clients.test ip daddr @o.test' "$WORK/commands"
 : > "$WORK/commands"

@@ -37,10 +37,19 @@ jobs:
           core_release=$(sed -n 's/^PKG_RELEASE:=//p' ruantiblock/Makefile)
           luci_version=$(sed -n 's/^PKG_VERSION:=//p' luci-app-ruantiblock/Makefile)
           luci_release=$(sed -n 's/^PKG_RELEASE:=//p' luci-app-ruantiblock/Makefile)
+          lua_version=$(sed -n 's/^PKG_VERSION:=//p' ruantiblock-mod-lua/Makefile)
+          lua_release=$(sed -n 's/^PKG_RELEASE:=//p' ruantiblock-mod-lua/Makefile)
+          py_version=$(sed -n 's/^PKG_VERSION:=//p' ruantiblock-mod-py/Makefile)
+          py_release=$(sed -n 's/^PKG_RELEASE:=//p' ruantiblock-mod-py/Makefile)
           test -n "$core_version"
           test -n "$core_release"
           test "$core_version" = "$luci_version"
           test "$core_release" = "$luci_release"
+          test "$core_version" = "$lua_version"
+          test "$core_release" = "$lua_release"
+          test "$core_version" = "$py_version"
+          test "$core_release" = "$py_release"
+          test "$(tr -d '\r\n' < luci-app-ruantiblock/root/usr/share/luci-app-ruantiblock/version)" = "${core_version}-r${core_release}"
           printf 'ARCHIVE_NAME=ruantiblock-%s-r%s-%s.zip\n' \
             "$core_version" "$core_release" "$ARCHIVE_SUFFIX" >> "$GITHUB_ENV"
 
@@ -60,6 +69,12 @@ jobs:
           python3 tests/parser-regression.py
           lua5.1 tests/parser-regression.lua ruantiblock-mod-lua/files/usr/libexec/ruantiblock/ruab_parser.lua
           bash tests/routing-regression.sh "$PWD/ruantiblock/files" "$(mktemp -d)"
+          bash tests/runtime-regression.sh "$PWD/ruantiblock/files" "$(mktemp -d)" 0
+          bash tests/client-filter-regression.sh "$PWD/ruantiblock/files" "$(mktemp -d)"
+          bash tests/dnsmasq-regression.sh "$PWD/ruantiblock/files" "$(mktemp -d)"
+          bash tests/workflow-regression.sh "$PWD"
+          node tests/cron-regression.cjs luci-app-ruantiblock/htdocs/luci-static/resources/view/ruantiblock/cron.js
+          node tests/luci-regression.cjs
 
       - name: Download and verify OpenWrt SDK
         env:

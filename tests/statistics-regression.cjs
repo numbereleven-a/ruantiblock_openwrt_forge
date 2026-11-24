@@ -33,5 +33,20 @@ async function check(label, fn) {
     });
     await check('statistics-disabled-keeps-global-polling', async () => { stopped = 0; answer = { status: 'disabled' }; await page.pollInfo(); assert.equal(stopped, 0); });
     await check('statistics-valid-rule-retained', () => assert.deepEqual(page.formatNftJson({ rules: { nftables: [{ metainfo: {} }, { rule: { expr: [{ match: { left: { payload: {} }, right: '@d.list1' } }, { counter: { bytes: 42 } }] } }] } }).rules, [['d.list1', 42]]));
+    await check('statistics-protocol-rules-distinct', () => {
+        const parsed = page.formatNftJson({
+            rules: {
+                nftables: [
+                    { metainfo: {} },
+                    { rule: { expr: [{ match: { left: { payload: { field: 'saddr' } }, right: '@clients.list5' } }, { match: { left: { meta: { key: 'l4proto' } }, right: 'tcp' } }, { match: { left: { payload: { field: 'daddr' } }, right: '@c.list5' } }, { counter: { bytes: 100 } }] } },
+                    { rule: { expr: [{ match: { left: { meta: { key: 'l4proto' } }, right: 'udp' } }, { match: { left: { payload: { field: 'daddr' } }, right: '@c.list5' } }, { counter: { bytes: 25 } }] } }
+                ]
+            }
+        });
+        assert.deepEqual(parsed.rules, [['c.list5', 100, 'tcp'], ['c.list5', 25, 'udp']]);
+        assert.notEqual(page.ruleElementId('c.list5', 'tcp'), page.ruleElementId('c.list5', 'udp'));
+        assert.equal(page.formatRuleDescription('c.list5', 'tcp'), 'list5 CIDR (TCP)');
+        assert.equal(page.formatRuleDescription('c.list5', 'udp'), 'list5 CIDR (UDP)');
+    });
     process.exitCode = failures ? 1 : 0;
 })();

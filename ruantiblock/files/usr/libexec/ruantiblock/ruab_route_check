@@ -84,7 +84,18 @@ Start() {
 }
 
 Stop() {
-    kill -s SIGKILL $(cat "$PID_FILE") 2> /dev/null
+    local _pid
+    if [ -r "$PID_FILE" ]; then
+        _pid=$(cat "$PID_FILE" 2> /dev/null)
+        case "$_pid" in
+            ''|*[!0-9]*|0) _pid="" ;;
+        esac
+        if [ -n "$_pid" ] && grep -qs "ruab_route_check" "/proc/${_pid}/cmdline" 2> /dev/null; then
+            kill "$_pid" 2> /dev/null
+            sleep 1
+            kill -0 "$_pid" 2> /dev/null && kill -9 "$_pid" 2> /dev/null
+        fi
+    fi
     rm -f "$PID_FILE"
 }
 

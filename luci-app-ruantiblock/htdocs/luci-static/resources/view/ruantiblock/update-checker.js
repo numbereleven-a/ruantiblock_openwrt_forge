@@ -109,13 +109,14 @@ return baseclass.extend({
 	cancel() {
 		if(this.activeRequest) {
 			this.activeRequest.cancelled = true;
-			fs.exec(UPDATE_CANCEL_HELPER, []).catch(() => {});
 			this.activeRequest = null;
+			return fs.exec(UPDATE_CANCEL_HELPER, []).catch(() => {});
 		};
+		return Promise.resolve();
 	},
 
 	check(currentVersion) {
-		this.cancel();
+		let cancelPromise = this.cancel();
 
 		let current = parseVersion(currentVersion);
 		if(!current) {
@@ -125,7 +126,12 @@ return baseclass.extend({
 		let request = { cancelled: false };
 		this.activeRequest = request;
 
-		return fs.exec(UPDATE_CHECK_HELPER, []).then(result => {
+		return cancelPromise.then(() => {
+			if(request.cancelled) {
+				return { state: 'cancelled' };
+			};
+			return fs.exec(UPDATE_CHECK_HELPER, []);
+		}).then(result => {
 			if(request.cancelled) {
 				return { state: 'cancelled' };
 			};

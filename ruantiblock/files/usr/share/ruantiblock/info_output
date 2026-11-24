@@ -19,11 +19,13 @@ Info() {
         }
         {
             if(NF == 4) {
-                gsub("/", "\134\134/", $4);
+                gsub(/\\/, "\\\\", $4);
+                gsub(/"/, "\\\"", $4);
+                gsub("/", "\\/", $4);
                 if(items >= 1) {
                     printf ",";
                 };
-                printf "{\"id\":\""$4"\",\"cidr\":\""$1"\",\"ip\":\""$2"\",\"fqdn\":\""$3"\"}";
+                printf "{\"id\":\"%s\",\"cidr\":\"%s\",\"ip\":\"%s\",\"fqdn\":\"%s\"}", $4, $1, $2, $3;
                 items++;
             };
         }
@@ -50,18 +52,21 @@ Info() {
             };
         }'
     if [ $? -eq 0 ]; then
-        printf ",\"dnsmasq\":"
-        $NFT_CMD -j list set $NFT_TABLE "$NFTSET_DNSMASQ" 2> /dev/null
+        local _set_json
+        _set_json=$($NFT_CMD -j list set $NFT_TABLE "$NFTSET_DNSMASQ" 2> /dev/null)
+        printf ",\"dnsmasq\":%s" "${_set_json:-{}}"
         printf ",\"dnsmasq_user_instances\":["
         for _inst in $USER_INSTANCES_ALL
         do
-            $NFT_CMD -j list set $NFT_TABLE "${NFTSET_DNSMASQ}.${_inst}" 2> /dev/null
-            printf ","
+            _set_json=$($NFT_CMD -j list set $NFT_TABLE "${NFTSET_DNSMASQ}.${_inst}" 2> /dev/null)
+            if [ -n "$_set_json" ]; then
+                printf "%s," "$_set_json"
+            fi
         done
         printf "{\"dummy\": {}}]"
         if [ "$BYPASS_MODE" = "1" ]; then
-            printf ",\"dnsmasq_bypass\":"
-            $NFT_CMD -j list set $NFT_TABLE "$NFTSET_BYPASS_FQDN" 2> /dev/null
+            _set_json=$($NFT_CMD -j list set $NFT_TABLE "$NFTSET_BYPASS_FQDN" 2> /dev/null)
+            printf ",\"dnsmasq_bypass\":%s" "${_set_json:-{}}"
         fi
         printf "}"
     fi

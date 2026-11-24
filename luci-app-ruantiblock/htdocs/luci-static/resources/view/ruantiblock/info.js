@@ -76,20 +76,27 @@ return view.extend({
 				if(!i || !i.rule) {
 					continue;
 				};
-				let set, bytes;
+				let set, bytes, proto;
 				if(Array.isArray(i.rule.expr)) {
 					i.rule.expr.forEach(e => {
 						if(!e) return;
-						if(e.match && e.match.left && e.match.left.payload &&
-							typeof(e.match.right) === 'string') {
-						set = e.match.right.replace('@', '');
+						if(e.match && e.match.left) {
+							if(e.match.left.payload &&
+								(!e.match.left.payload.field || e.match.left.payload.field === 'daddr') &&
+								typeof(e.match.right) === 'string') {
+								set = e.match.right.replace('@', '');
+							}
+							else if(e.match.left.meta && e.match.left.meta.key === 'l4proto' &&
+								typeof(e.match.right) === 'string') {
+								proto = e.match.right;
+							};
 						}
 						else if(e.counter) {
-						bytes = e.counter.bytes;
+							bytes = e.counter.bytes;
 						};
 					});
 				};
-				output.rules.push([ set, bytes ]);
+				output.rules.push(proto ? [ set, bytes, proto ] : [ set, bytes ]);
 			};
 
 		};
@@ -213,8 +220,8 @@ return view.extend({
 				let nft_data = this.formatNftJson(data);
 
 				if(nft_data.rules.length > 0) {
-					for(let [set, bytes] of nft_data.rules) {
-						let elem = document.getElementById('rules.' + set);
+					for(let [set, bytes, proto] of nft_data.rules) {
+						let elem = document.getElementById(this.ruleElementId(set, proto));
 						if(elem) {
 							elem.textContent = bytes;
 						};
@@ -243,12 +250,17 @@ return view.extend({
 		});
 	},
 
-	formatRuleDescription(s) {
-		return (s.length >= 1) ? (
+	ruleElementId(set, proto) {
+		return 'rules.' + set + (proto ? '.' + proto : '');
+	},
+
+	formatRuleDescription(s, proto) {
+		let descr = (s.length >= 1) ? (
 			s.replace(/^c\.?(.*)/, '$1 CIDR').replace(/^i\.?(.*)/, '$1 IP')
 			.replace(/^d\.?(.*)/, '$1 dnsmasq').replace(/^onion\.?(.*)/, '$1 onion')
 			.replace(/^bi/, 'bypass IP').replace(/^bd/, 'bypass dnsmasq')
 		) : '';
+		return (proto) ? `${descr} (${proto.toUpperCase()})` : descr;
 	},
 
 	load() {
@@ -344,7 +356,7 @@ return view.extend({
 						]),
 					]);
 
-					for(let [set, bytes] of nft_data.rules) {
+					for(let [set, bytes, proto] of nft_data.rules) {
 						if(!set) {
 							continue;
 						};
@@ -357,10 +369,10 @@ return view.extend({
 								E('td', {
 									'class'     : 'td left',
 									'data-title': _('Description'),
-								}, this.formatRuleDescription(set)),
+								}, this.formatRuleDescription(set, proto)),
 								E('td', {
 									'class'     : 'td left',
-									'id'        : 'rules.' + set,
+									'id'        : this.ruleElementId(set, proto),
 									'data-title': _('Bytes'),
 								}, bytes),
 							])

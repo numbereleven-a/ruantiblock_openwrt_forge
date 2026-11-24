@@ -57,7 +57,7 @@ return baseclass.extend({
 			return [
 				lineNum,                               // #         (Number)
 				strArray[1],                           // Timestamp (String)
-				strArray[2],                           // Host      (String)
+				this.htmlEntities(strArray[2]),        // Host      (String)
 				null,                                  // Facility  (String)
 				null,                                  // Level     (String)
 				this.htmlEntities(strArray[3]) || ' ', // Message   (String)

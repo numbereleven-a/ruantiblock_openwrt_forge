@@ -6,7 +6,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=ruantiblock
 PKG_VERSION:=2.1.20
-PKG_RELEASE:=5
+PKG_RELEASE:=6
 PKG_MAINTAINER:=numbereleven-a <https://github.com/numbereleven-a/ruantiblock_openwrt_forge>
 
 include $(INCLUDE_DIR)/package.mk
@@ -17,7 +17,7 @@ define Package/$(PKG_NAME)
   TITLE:=Ruantiblock
   URL:=https://github.com/numbereleven-a/ruantiblock_openwrt_forge
   PKGARCH:=all
-  DEPENDS:=+dnsmasq-full +kmod-nft-tproxy
+  DEPENDS:=+dnsmasq-full +kmod-nft-tproxy +nftables-json
 endef
 
 define Package/$(PKG_NAME)/description
@@ -91,19 +91,52 @@ endef
 
 define Package/$(PKG_NAME)/preinst
 #!/bin/sh
+[ -n "$${IPKG_INSTROOT}" ] && exit 0
 
 FILE_MAIN_SCRIPT="/usr/bin/ruantiblock"
+FILE_INIT_SCRIPT="/etc/init.d/ruantiblock"
+STATE_FILE="/tmp/.ruantiblock_upgrade_state"
+
+if [ -e "$$FILE_INIT_SCRIPT" ] && [ ! -f "$$STATE_FILE" ]; then
+	if "$$FILE_INIT_SCRIPT" enabled 2>/dev/null; then
+		printf 'enabled\n' > "$$STATE_FILE"
+	else
+		printf 'disabled\n' > "$$STATE_FILE"
+	fi
+fi
 
 test -e "$$FILE_MAIN_SCRIPT" && $$FILE_MAIN_SCRIPT destroy
 
 exit 0
 endef
 
+define Package/$(PKG_NAME)/postinst
+#!/bin/sh
+[ -n "$${IPKG_INSTROOT}" ] && exit 0
+
+FILE_INIT_SCRIPT="/etc/init.d/ruantiblock"
+STATE_FILE="/tmp/.ruantiblock_upgrade_state"
+
+if [ -f "$$STATE_FILE" ]; then
+	STATE="$$(cat "$$STATE_FILE" 2>/dev/null)"
+	rm -f "$$STATE_FILE"
+	if [ "$$STATE" = "enabled" ] && [ -e "$$FILE_INIT_SCRIPT" ]; then
+		"$$FILE_INIT_SCRIPT" enable
+	fi
+elif [ -e "$$FILE_INIT_SCRIPT" ]; then
+	"$$FILE_INIT_SCRIPT" enable
+fi
+
+exit 0
+endef
+
 define Package/$(PKG_NAME)/prerm
 #!/bin/sh
+[ -n "$${IPKG_INSTROOT}" ] && exit 0
 
 FILE_INIT_SCRIPT="/etc/init.d/ruantiblock"
 FILE_MAIN_SCRIPT="/usr/bin/ruantiblock"
+STATE_FILE="/tmp/.ruantiblock_upgrade_state"
 CRONTAB_FILE="/etc/crontabs/root"
 DNSMASQ_DATA_FILE_BYPASS="/tmp/dnsmasq*.d/00-ruantiblock_bypass.dnsmasq"
 DNSMASQ_DATA_FILE_USER_INSTANCES="/tmp/dnsmasq*.d/01-ruantiblock_user_instances.dnsmasq"
@@ -112,6 +145,18 @@ DNSMASQ_DATA_FILE_NFTSETS="/tmp/dnsmasq*.d/03-ruantiblock_nftsets.dnsmasq"
 DNSMASQ_DATA_FILE_BYPASS_TMP="$${DNSMASQ_DATA_FILE_BYPASS}.tmp"
 DNSMASQ_DATA_FILE_USER_INSTANCES_TMP="$${DNSMASQ_DATA_FILE_USER_INSTANCES}.tmp"
 DNSMASQ_DATA_FILE_TMP="$${DNSMASQ_DATA_FILE}.tmp"
+
+if [ "$$1" = "upgrade" ]; then
+	if [ -e "$$FILE_INIT_SCRIPT" ]; then
+		if "$$FILE_INIT_SCRIPT" enabled 2>/dev/null; then
+			printf 'enabled\n' > "$$STATE_FILE"
+		else
+			printf 'disabled\n' > "$$STATE_FILE"
+		fi
+	fi
+	test -e "$$FILE_MAIN_SCRIPT" && $$FILE_MAIN_SCRIPT destroy
+	exit 0
+fi
 
 test -e "$$FILE_MAIN_SCRIPT" && $$FILE_MAIN_SCRIPT destroy
 test -e "$$FILE_INIT_SCRIPT" && $$FILE_INIT_SCRIPT disable

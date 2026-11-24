@@ -10,9 +10,10 @@ LUCI_APP=1
 HTTPS_DNS_PROXY=1
 
 OWRT_VERSION="25.12"
-RUAB_VERSION="2.1.20-r5"
+RUAB_VERSION="2.1.20-r6"
 RELEASE_BASE_URL="https://github.com/numbereleven-a/ruantiblock_openwrt_forge/releases/download/${RUAB_VERSION}"
 PKG_DIR=""
+trap '[ -n "$PKG_DIR" ] && rm -rf "$PKG_DIR"' EXIT HUP INT TERM
 
 if [ -n "$1" ]; then
     OWRT_VERSION="$1"
@@ -27,7 +28,7 @@ case "$OWRT_VERSION" in
 esac
 URL_RELEASE_ARCHIVE="${RELEASE_BASE_URL}/${ARCHIVE_NAME}"
 ### tor
-URL_TORRC="https://raw.githubusercontent.com/gSpotx2f/ruantiblock_openwrt/master/tor/etc/tor/torrc"
+URL_TORRC="https://raw.githubusercontent.com/numbereleven-a/ruantiblock_openwrt_forge/master/tor/etc/tor/torrc"
 
 ### Local files
 
@@ -164,7 +165,10 @@ AppStart() {
 }
 
 SetCronTask() {
-    echo "0 3 */3 * * ${FILE_MAIN_SCRIPT} update" >> /etc/crontabs/root
+    mkdir -p /etc/crontabs
+    if ! grep -Fq "${FILE_MAIN_SCRIPT} update" /etc/crontabs/root 2>/dev/null; then
+        echo "0 3 */3 * * ${FILE_MAIN_SCRIPT} update" >> /etc/crontabs/root
+    fi
     /etc/init.d/cron restart 2> /dev/null
     /etc/init.d/cron enable
 }
@@ -278,15 +282,12 @@ ConfirmProxyMode() {
     case $_reply in
         1|"")
             PROXY_MODE=1
-            break
         ;;
         2)
             PROXY_MODE=2
-            break
         ;;
         3)
             PROXY_MODE=3
-            break
         ;;
         q|Q)
             printf "Bye...\n"; exit 0
@@ -304,11 +305,9 @@ ConfirmBlacklist() {
     case $_reply in
         1|"")
             BLACKLIST=1
-            break
         ;;
         2)
             BLACKLIST=2
-            break
         ;;
         q|Q)
             printf "Bye...\n"; exit 0
@@ -326,11 +325,9 @@ ConfirmLuaModule() {
     case $_reply in
         y|Y|"")
             LUA_MODULE=1
-            break
         ;;
         n|N)
             LUA_MODULE=0
-            break
         ;;
         q|Q)
             printf "Bye...\n"; exit 0
@@ -348,11 +345,9 @@ ConfirmLuciApp() {
     case $_reply in
         y|Y|"")
             LUCI_APP=1
-            break
         ;;
         n|N)
             LUCI_APP=0
-            break
         ;;
         q|Q)
             printf "Bye...\n"; exit 0
@@ -370,11 +365,9 @@ ConfirmHttpsDnsProxy() {
     case $_reply in
         y|Y|"")
             HTTPS_DNS_PROXY=1
-            break
         ;;
         n|N)
             HTTPS_DNS_PROXY=0
-            break
         ;;
         q|Q)
             printf "Bye...\n"; exit 0
@@ -391,7 +384,7 @@ ConfirmProcessing() {
     read _reply
     case $_reply in
         y|Y|"")
-            break
+            :
         ;;
         n|N|q|Q)
             printf "Bye...\n"; exit 0
@@ -429,7 +422,7 @@ if [ $? -eq 0 ]; then
     else
         PrintBold "Installing Tor configuration..."
         InstallTorConfig
-        if $(/etc/init.d/tor enabled); then
+        if /etc/init.d/tor enabled; then
             /etc/init.d/tor restart
         fi
     fi
