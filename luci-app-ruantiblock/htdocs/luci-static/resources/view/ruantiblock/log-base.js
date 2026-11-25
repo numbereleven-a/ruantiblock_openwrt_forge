@@ -310,6 +310,15 @@ return baseclass.extend({
 				/'/g, '&#39;');
 		},
 
+		decodeHtmlEntities(str) {
+			return String(str)
+				.replace(/&#39;/g, "'")
+				.replace(/&#34;/g, '"')
+				.replace(/&#62;/g, '>')
+				.replace(/&#60;/g, '<')
+				.replace(/&#38;/g, '&');
+		},
+
 		checkZeroValue(value) {
 			return (/^[0-9]+$/.test(value)) ? value : 0
 		},
@@ -611,27 +620,29 @@ return baseclass.extend({
 		setStringFilter(entriesArray, fieldNum, pattern) {
 			let not     = pattern.startsWith('!');
 			pattern     = pattern.replace(/^!/, '');
-			let needle  = (fieldNum == 5) ? this.htmlEntities(pattern) : pattern;
 			let isHFunc = (typeof(this.filterHighlightFunc) == 'function');
 			let fArr    = [];
-			if(!needle) {
+			if(!pattern) {
 				return entriesArray;
 			};
 			entriesArray.forEach((e, i) => {
 				if(e[fieldNum] == null) {
 					return;
 				};
-				let value = String(e[fieldNum]);
+				let plain = (fieldNum == 2 || fieldNum == 5)
+					? this.decodeHtmlEntities(e[fieldNum]) : String(e[fieldNum]);
 				if(not) {
-					if(!value.includes(needle)) {
+					if(!plain.includes(pattern)) {
 						fArr.push(e);
 					};
 				} else {
-					if(value.includes(needle)) {
+					if(plain.includes(pattern)) {
 						let entry = e.slice();
 						if(isHFunc) {
-							entry[fieldNum] = value.split(needle).join(
-								this.filterHighlightFunc(needle));
+							let highlighted = this.filterHighlightFunc(this.htmlEntities(pattern));
+							entry[fieldNum] = plain.split(pattern)
+								.map(part => this.htmlEntities(part))
+								.join(highlighted);
 						};
 						fArr.push(entry);
 					};
@@ -654,16 +665,31 @@ return baseclass.extend({
 					if(e[fieldNum] == null) {
 						return;
 					};
+					let plain = (fieldNum == 2 || fieldNum == 5)
+						? this.decodeHtmlEntities(e[fieldNum]) : String(e[fieldNum]);
+					regExp.lastIndex = 0;
 					if(not) {
-						if(!(regExp.test(e[fieldNum]))) {
+						if(!(regExp.test(plain))) {
 							fArr.push(e);
 						};
 					} else {
-						if(regExp.test(e[fieldNum])) {
+						if(regExp.test(plain)) {
 							let entry = e.slice();
 							if(isHFunc) {
-								entry[fieldNum] = String(e[fieldNum])
-									.replace(regExp, this.filterHighlightFunc);
+								regExp.lastIndex = 0;
+								let out = '';
+								let lastIdx = 0;
+								let match;
+								while((match = regExp.exec(plain)) !== null) {
+									out += this.htmlEntities(plain.slice(lastIdx, match.index));
+									out += this.filterHighlightFunc(this.htmlEntities(match[0]));
+									lastIdx = match.index + match[0].length;
+									if(match[0].length === 0) {
+										regExp.lastIndex++;
+									};
+								};
+								out += this.htmlEntities(plain.slice(lastIdx));
+								entry[fieldNum] = out;
 							};
 							fArr.push(entry);
 						};

@@ -289,8 +289,15 @@ end
 local idn_encode
 do
 	function idn_encode(domain)
+		if(type(domain) ~= 'string' or #domain == 0) then
+			return nil, 'Invalid domain'
+		end
+		domain = domain:gsub('%.$', '')
+		if(#domain == 0 or domain:sub(1, 1) == '.' or domain:find('..', 1, true)) then
+			return nil, 'Invalid domain'
+		end
 		local labels = {}
-		for label in domain:gmatch('([^.]+)%.?') do
+		for label in domain:gmatch('([^.]+)') do
 			-- Domain names can only consist of a-z, A-Z, 0-9, - and aren't allowed
 			-- to start or end with a hyphen
 			local first, last = label:sub(1, 1), label:sub(-1)
@@ -300,12 +307,24 @@ do
 
 			if(label:match('^[a-zA-Z0-9-]+$')) then
 				table.insert(labels, label)
-			elseif(label:sub(1,1) ~= '-' and label:sub(2,2) ~= '-') then
-				local plabel = punycode_encode(label)
+			elseif(label:find('[%z\1-\44\46-\47\58-\64\91-\96\123-\127]')) then
+				return nil, 'Invalid DNS label'
+			else
+				local ucs4 = toUCS4(label)
+				if(#ucs4 >= 4 and ucs4[3] == delimiter and ucs4[4] == delimiter) then
+					return nil, 'Invalid DNS label'
+				end
+				local plabel = punycode_encode(ucs4)
+				if(not plabel or #plabel == 0) then
+					return nil, 'Invalid DNS label'
+				end
 				table.insert(labels, string.format('xn--%s', plabel))
 			end
 		end
 
+		if(#labels == 0) then
+			return nil, 'Invalid domain'
+		end
 		return table.concat(labels, '.')
 	end
 end

@@ -63,7 +63,7 @@ RemoveFile() {
 BackupCurrentConfig() {
     local _file
     MakeDir "$BACKUP_DIR"
-    for _file in $(ls -1 "$CONFIG_DIR" | grep -v "$(basename $BACKUP_DIR_BASE)*")
+    for _file in $(ls -1 "$CONFIG_DIR" 2>/dev/null | grep -Fv "$(basename "$BACKUP_DIR_BASE")")
     do
         cp -af "${CONFIG_DIR}/${_file}" "${BACKUP_DIR}/${_file}"
     done

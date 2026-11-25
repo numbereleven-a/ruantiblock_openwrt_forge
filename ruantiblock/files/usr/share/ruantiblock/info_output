@@ -1,13 +1,19 @@
 Info() {
     local _update_status _user_entries_status _inst
     if [ -f "$UPDATE_STATUS_FILE" ]; then
-        _update_status=$($AWK_CMD '{
-            if(NF < 4) {
-                printf "{\"status\":false}";
-            } else {
-                printf "{\"status\":true,\"date\":\""$4"\",\"cidr\":\""$1"\",\"ip\":\""$2"\",\"fqdn\":\""$3"\"}";
-            };
-        }' "$UPDATE_STATUS_FILE")
+        _update_status=$($AWK_CMD '
+            BEGIN {
+                out = "{\"status\":false}";
+            }
+            NR == 1 {
+                if(NF >= 4) {
+                    out = sprintf("{\"status\":true,\"date\":\"%s\",\"cidr\":\"%s\",\"ip\":\"%s\",\"fqdn\":\"%s\"}", $4, $1, $2, $3);
+                };
+                exit;
+            }
+            END {
+                printf "%s", out;
+            }' "$UPDATE_STATUS_FILE")
     else
         _update_status="{\"status\":false}"
     fi

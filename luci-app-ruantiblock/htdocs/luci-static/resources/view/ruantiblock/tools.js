@@ -50,11 +50,9 @@ return baseclass.extend({
 	grExcludedNetsFile  : '/etc/ruantiblock/gr_excluded_nets',
 	grExcludedSldFile   : '/etc/ruantiblock/gr_excluded_sld',
 	crontabFile         : '/etc/crontabs/root',
-	infoLabelStarting   : E('span', { 'class': 'label-status starting' }, _('Starting')),
-	infoLabelRunning    : E('span', { 'class': 'label-status running' }, _('Enabled')),
-	infoLabelUpdating   : E('span', { 'class': 'label-status updating' }, _('Updating')),
-	infoLabelStopped    : E('span', { 'class': 'label-status stopped' }, _('Disabled')),
-	infoLabelError      : E('span', { 'class': 'label-status error' }, _('Error')),
+	makeStatusLabel(cls, text) {
+		return E('span', { 'class': 'label-status ' + cls }, text);
+	},
 
 	blacklistPresets: {
 		'ruantiblock-fqdn'     : [ 'ruantiblock', 'fqdn', 'https://github.com/gSpotx2f/ruantiblock_blacklist' ],
@@ -68,6 +66,9 @@ return baseclass.extend({
 		'antifilter-fqdn'      : [ '*antifilter', 'fqdn', 'https://antifilter.download' ],
 		'antifilter-fqdn-only' : [ '*antifilter', 'fqdn-only', 'https://antifilter.download' ],
 		'antifilter-ip'        : [ '*antifilter', 'ip', 'https://antifilter.download' ],
+		'fz-fqdn'              : [ '*fz', 'fqdn', 'https://github.com/fz139/vigruzki' ],
+		'fz-fqdn-only'         : [ '*fz', 'fqdn-only', 'https://github.com/fz139/vigruzki' ],
+		'fz-ip'                : [ '*fz', 'ip', 'https://github.com/fz139/vigruzki' ],
 	},
 
 	defaultConfig: {
@@ -160,21 +161,21 @@ return baseclass.extend({
 
 		switch(app_status_code) {
 			case 0:
-				app_status_label = this.infoLabelRunning;
+				app_status_label = this.makeStatusLabel('running', _('Enabled'));
 				break;
 			case 2:
-				app_status_label = this.infoLabelStopped;
+				app_status_label = this.makeStatusLabel('stopped', _('Disabled'));
 				break;
 			case 3:
-				app_status_label = this.infoLabelStarting;
+				app_status_label = this.makeStatusLabel('starting', _('Starting'));
 				spinning = ' spinning';
 				break;
 			case 4:
-				app_status_label = this.infoLabelUpdating;
+				app_status_label = this.makeStatusLabel('updating', _('Updating'));
 				spinning = ' spinning';
 				break;
 			default:
-				app_status_label = this.infoLabelError;
+				app_status_label = this.makeStatusLabel('error', _('Error'));
 				return E('table', { 'class': 'table' }, [
 					E('tr', { 'class': 'tr' }, [
 						E('td', { 'class': 'td left', 'style': 'width:33%' }, _('Status')),
@@ -184,7 +185,7 @@ return baseclass.extend({
 		};
 
 		if(app_status_code == 2) {
-			vpn_route_label = this.infoLabelStopped;
+			vpn_route_label = this.makeStatusLabel('stopped', _('Disabled'));
 		} else if(vpn_route_status_code != 0) {
 			vpn_route_label = [
 				E('span', { 'class': 'label-status error' }, _('Error')),

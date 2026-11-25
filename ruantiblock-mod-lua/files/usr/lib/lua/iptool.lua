@@ -99,17 +99,24 @@ local function summarize_address_range(first, last)
         local nbits = math.min(count_righthand_zero_bits(first, ip_bits), bit_length(last - first + 1) - 1)
         ret_val = {[1] = first, [2] = (ip_bits - nbits)}
 
-        first = first + lshift(1, nbits)
-        if first - 1 == ipv4_capacity then
-            return
-        end
+        first = first + (2 ^ nbits)
         return ret_val
     end
 end
 
 local function get_network_addr(network)
     local ip, pref = network:match(cidr_pattern)
-    return ip and ip_to_int(ip), tonumber(pref)
+    local pref_num = tonumber(pref)
+    if not ip or not pref_num or not check_prefix(pref_num) then
+        return nil, nil
+    end
+    local a, b, c, d = ip:match(ipaddr_pattern)
+    if not check_ip(tonumber(a), tonumber(b), tonumber(c), tonumber(d)) then
+        return nil, nil
+    end
+    local ip_int = ip_to_int(ip)
+    local step = 2 ^ (ipv4_length - pref_num)
+    return math.floor(ip_int / step) * step, pref_num
 end
 
 local function hosts_from_network(network)
@@ -168,6 +175,9 @@ local function overlap_ip(ip, network)
     if ip == nil then
         return
     end
+    if prefixlen == 0 then
+        return true
+    end
     local offset = ipv4_length - prefixlen
     return (rshift(ip, offset) == rshift(network_address, offset))
 
@@ -195,7 +205,11 @@ local function overlap_net(subnet, network)
     if network_address_1 == network_address_2 then
         return true
     end
-    local offset = ipv4_length - math.min(prefixlen_1, prefixlen_2)
+    local min_pref = math.min(prefixlen_1, prefixlen_2)
+    if min_pref == 0 then
+        return true
+    end
+    local offset = ipv4_length - min_pref
     return (rshift(network_address_1, offset) == rshift(network_address_2, offset))
 end
 

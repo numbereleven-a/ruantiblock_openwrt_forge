@@ -127,7 +127,7 @@ return view.extend({
 
 	makeDnsmasqTable(ipDataArray, title) {
 		let lines   = `<tr class="tr"><td class="td center">${_('No entries available...')}</td></tr>`;
-		let ipTable = E('table', { 'id': 'ipTable', 'class': 'table' });
+		let ipTable = E('table', { 'class': 'table ruantiblock-ip-table' });
 
 		let entries = Array.isArray(ipDataArray) ? ipDataArray.filter(e => Array.isArray(e) && e.length >= 2) : [];
 		entries.sort((a, b) => a[1] - b[1]);
@@ -171,6 +171,219 @@ return view.extend({
 		]);
 	},
 
+	makeUpdateStatusTable(data) {
+		let update_status = E('table', { 'class': 'table' });
+		if(data.last_blacklist_update && data.last_blacklist_update.status) {
+			update_status.append(
+				E('tr', { 'class': 'tr' }, [
+					E('td', { 'class': 'td left', 'style': 'width:33%' },
+						_('Last blacklist update') + ':'),
+					E('td', { 'class': 'td left',
+								'id' : 'last_blacklist_update.date' },
+						data.last_blacklist_update.date),
+				]),
+				E('tr', { 'class': 'tr' }, [
+					E('td', { 'class': 'td left' }, 'CIDR:'),
+					E('td', { 'class': 'td left',
+								'id' : 'last_blacklist_update.cidr' },
+						data.last_blacklist_update.cidr),
+				]),
+				E('tr', { 'class': 'tr' }, [
+					E('td', { 'class': 'td left' }, 'IP:'),
+					E('td', { 'class': 'td left',
+								'id' : 'last_blacklist_update.ip' },
+						data.last_blacklist_update.ip),
+				]),
+				E('tr', { 'class': 'tr' }, [
+					E('td', { 'class': 'td left' }, 'FQDN:'),
+					E('td', { 'class': 'td left',
+								'id' : 'last_blacklist_update.fqdn' },
+						data.last_blacklist_update.fqdn),
+				])
+			);
+		} else {
+			update_status.append(
+				E('tr', { 'class': 'tr' }, [
+					E('td', { 'class': 'td left', 'style': 'width:33%' },
+						_('Last blacklist update') + ':'),
+					E('td', { 'class': 'td left',
+								'id' : 'last_blacklist_update.date' }, _('No data')),
+				])
+			);
+		};
+		return update_status;
+	},
+
+	buildContentSections(data) {
+		let update_status        = null,
+			user_entries         = null,
+			rules                = null,
+			dnsmasq              = null,
+			dnsmasqUserInstances = null,
+			dnsmasqBypass        = null;
+
+		if(data) {
+			if(data.status === 'enabled') {
+				update_status = this.makeUpdateStatusTable(data);
+
+				if(Array.isArray(data.user_entries) && data.user_entries.length > 0) {
+					user_entries = E('table', { 'class': 'table' });
+					for(let i of data.user_entries) {
+						if(!i || typeof i.id !== 'string') continue;
+						user_entries.append(
+							E('tr', { 'class': 'tr' }, [
+								E('td', { 'class': 'td left', 'style': 'word-wrap:break-word' },
+									i.id.slice(0, 114) + (i.id.length > 115 ? '...' : '')),
+								E('td', { 'class': 'td left' },
+									`CIDR: ${i.cidr}, IP: ${i.ip}, FQDN: ${i.fqdn}`),
+							])
+						);
+					};
+				};
+
+				let nft_data = this.formatNftJson(data);
+
+				if(nft_data.rules) {
+					let table_rules = E('table', { 'class': 'table' }, [
+						E('tr', { 'class': 'tr table-titles' }, [
+							E('th', { 'class': 'th left', 'style': 'width:33%' },
+								_('Match-set')),
+							E('th', { 'class': 'th left' }, _('Description')),
+							E('th', { 'class': 'th left' }, _('Bytes')),
+						]),
+					]);
+
+					for(let [set, bytes, proto] of nft_data.rules) {
+						if(!set) {
+							continue;
+						};
+						table_rules.append(
+							E('tr', { 'class': 'tr' }, [
+								E('td',{
+									'class'     : 'td left',
+									'data-title': _('Match-set'),
+								}, set),
+								E('td', {
+									'class'     : 'td left',
+									'data-title': _('Description'),
+								}, this.formatRuleDescription(set, proto)),
+								E('td', {
+									'class'     : 'td left',
+									'id'        : this.ruleElementId(set, proto),
+									'data-title': _('Bytes'),
+								}, bytes),
+							])
+						);
+					};
+
+					rules = E([
+						E('h3', {}, _('Nftables rules')),
+						table_rules,
+					]);
+				};
+
+				if(nft_data.dnsmasq) {
+					dnsmasq = E('div', {
+						'id'   : 'rdTableWrapper',
+						'style': 'width:100%',
+					}, this.makeDnsmasqTable(nft_data.dnsmasq, _('Dnsmasq')));
+				};
+
+				if(nft_data.dnsmasq_user_instances && nft_data.dnsmasq_user_instances.length > 0) {
+					let rdsTableWrapper = E('div', {
+						'id'   : 'rdsTableWrapper',
+						'style': 'width:100%',
+					});
+
+					for(let i of nft_data.dnsmasq_user_instances) {
+						rdsTableWrapper.append(this.makeDnsmasqTable(i[1], _('Dnsmasq') + ' ' + i[0]));
+					};
+
+					dnsmasqUserInstances = rdsTableWrapper;
+				};
+
+				if(nft_data.dnsmasq_bypass) {
+					dnsmasqBypass = E('div', {
+						'id'   : 'rdbTableWrapper',
+						'style': 'width:100%',
+					}, this.makeDnsmasqTable(nft_data.dnsmasq_bypass, _('Dnsmasq bypass')));
+				};
+			} else {
+				update_status = E('em', {}, _('Status') + ' : ' + _('disabled'));
+			};
+		};
+
+		let sections = [
+			E('div', { 'class': 'cbi-section fade-in' },
+				E('div', { 'id': 'updateStatusWrapper', 'class': 'cbi-section-node' }, update_status)
+			),
+		];
+
+		if(user_entries) {
+			sections.push(
+				E('div', { 'class': 'cbi-section fade-in' }, [
+					E('h3', {}, _('User entries')),
+					E('div', { 'class': 'cbi-section-node' }, user_entries),
+				])
+			);
+		};
+
+		if(rules) {
+			sections.push(
+				E('div', { 'class': 'cbi-section fade-in' },
+					E('div', { 'class': 'cbi-section-node' }, rules)
+				)
+			);
+		};
+
+		if(dnsmasqBypass) {
+			sections.push(
+				E('div', { 'class': 'cbi-section fade-in' },
+					E('div', { 'class': 'cbi-section-node' }, dnsmasqBypass)
+				)
+			);
+		};
+
+		if(dnsmasqUserInstances) {
+			sections.push(
+				E('div', { 'class': 'cbi-section fade-in' },
+					E('div', { 'class': 'cbi-section-node' }, dnsmasqUserInstances)
+				)
+			);
+		};
+
+		if(dnsmasq) {
+			sections.push(
+				E('div', { 'class': 'cbi-section fade-in' },
+					E('div', { 'class': 'cbi-section-node' }, dnsmasq)
+				)
+			);
+		};
+
+		return sections;
+	},
+
+	makeLayoutSignature(data, nft_data) {
+		let status = (data && data.status === 'enabled') ? 'enabled' : 'disabled';
+		if(status !== 'enabled') {
+			return status;
+		};
+		let ruleKeys = (nft_data.rules || [])
+			.filter(r => r && r[0])
+			.map(r => this.ruleElementId(r[0], r[2]))
+			.join('|');
+		let userEntriesKey = Array.isArray(data.user_entries)
+			? data.user_entries.map(i => (i && typeof(i.id) === 'string')
+				? `${i.id}:${i.cidr}:${i.ip}:${i.fqdn}` : '').join('|')
+			: '';
+		let flags = [
+			nft_data.dnsmasq ? '1' : '0',
+			(nft_data.dnsmasq_user_instances && nft_data.dnsmasq_user_instances.length > 0) ? '1' : '0',
+			nft_data.dnsmasq_bypass ? '1' : '0',
+		].join('');
+		return `${status}#${flags}#${ruleKeys}#${userEntriesKey}`;
+	},
+
 	pollInfo() {
 		return fs.exec_direct(tools.execPath, [ 'html-info' ], 'json').catch(e => {
 			if(!this.pollErrorShown) {
@@ -189,35 +402,45 @@ return view.extend({
 			} catch(e) {};
 			this.pollErrorShown = false;
 
-			if(data.status === 'enabled') {
-				let date = document.getElementById('last_blacklist_update.date');
+			let statsContentWrapper = document.getElementById('statsContentWrapper');
+			let nextStatus = (data && data.status === 'enabled') ? 'enabled' : 'disabled';
+			let nft_data = (nextStatus === 'enabled') ? this.formatNftJson(data) : null;
+			let nextSignature = this.makeLayoutSignature(data, nft_data || {});
 
-				if(data.last_blacklist_update && data.last_blacklist_update.status) {
-					if(date) {
-						date.textContent = data.last_blacklist_update.date;
-					};
+			if(statsContentWrapper && this.lastLayoutSignature !== nextSignature) {
+				statsContentWrapper.innerHTML = '';
+				this.buildContentSections(data).forEach(section => statsContentWrapper.append(section));
+				this.lastLayoutSignature = nextSignature;
+				return;
+			};
 
-					let ip   = document.getElementById('last_blacklist_update.ip');
-					if(ip) {
-						ip.textContent = data.last_blacklist_update.ip;
-					};
-
-					let cidr = document.getElementById('last_blacklist_update.cidr');
-					if(cidr) {
-						cidr.textContent = data.last_blacklist_update.cidr;
-					};
-
-					let fqdn = document.getElementById('last_blacklist_update.fqdn');
-					if(fqdn) {
-						fqdn.textContent = data.last_blacklist_update.fqdn;
-					};
+			if(nextStatus === 'enabled') {
+				let updateStatusWrapper = document.getElementById('updateStatusWrapper');
+				if(updateStatusWrapper) {
+					updateStatusWrapper.innerHTML = '';
+					updateStatusWrapper.append(this.makeUpdateStatusTable(data));
 				} else {
-					if(date) {
+					let date = document.getElementById('last_blacklist_update.date');
+					if(data.last_blacklist_update && data.last_blacklist_update.status) {
+						if(date) {
+							date.textContent = data.last_blacklist_update.date;
+						};
+						let ip   = document.getElementById('last_blacklist_update.ip');
+						if(ip) {
+							ip.textContent = data.last_blacklist_update.ip;
+						};
+						let cidr = document.getElementById('last_blacklist_update.cidr');
+						if(cidr) {
+							cidr.textContent = data.last_blacklist_update.cidr;
+						};
+						let fqdn = document.getElementById('last_blacklist_update.fqdn');
+						if(fqdn) {
+							fqdn.textContent = data.last_blacklist_update.fqdn;
+						};
+					} else if(date) {
 						date.textContent = _('No data');
 					};
 				};
-
-				let nft_data = this.formatNftJson(data);
 
 				if(nft_data.rules.length > 0) {
 					for(let [set, bytes, proto] of nft_data.rules) {
@@ -280,200 +503,21 @@ return view.extend({
 			data = JSON.parse(data);
 		} catch(e) {};
 
-		let update_status        = null,
-			user_entries         = null,
-			rules                = null,
-			dnsmasq              = null,
-			dnsmasqUserInstances = null,
-			dnsmasqBypass        = null;
+		let initialNftData = (data && data.status === 'enabled') ? this.formatNftJson(data) : {};
+		this.lastLayoutSignature = this.makeLayoutSignature(data, initialNftData);
+		let statsContentWrapper = E('div', { 'id': 'statsContentWrapper' },
+			this.buildContentSections(data)
+		);
 
-		if(data) {
-			if(data.status === 'enabled') {
-				update_status = E('table', { 'class': 'table' });
+		poll.add(L.bind(this.pollInfo, this), this.pollInterval);
 
-				if(data.last_blacklist_update && data.last_blacklist_update.status) {
-					update_status.append(
-						E('tr', { 'class': 'tr' }, [
-							E('td', { 'class': 'td left', 'style': 'width:33%' },
-								_('Last blacklist update') + ':'),
-							E('td', { 'class': 'td left',
-										'id' : 'last_blacklist_update.date' },
-								data.last_blacklist_update.date),
-						]),
-						E('tr', { 'class': 'tr' }, [
-							E('td', { 'class': 'td left' }, 'CIDR:'),
-							E('td', { 'class': 'td left',
-										'id' : 'last_blacklist_update.cidr' },
-								data.last_blacklist_update.cidr),
-						]),
-						E('tr', { 'class': 'tr' }, [
-							E('td', { 'class': 'td left' }, 'IP:'),
-							E('td', { 'class': 'td left',
-										'id' : 'last_blacklist_update.ip' },
-								data.last_blacklist_update.ip),
-						]),
-						E('tr', { 'class': 'tr' }, [
-							E('td', { 'class': 'td left' }, 'FQDN:'),
-							E('td', { 'class': 'td left',
-										'id' : 'last_blacklist_update.fqdn' },
-								data.last_blacklist_update.fqdn),
-						])
-					);
-				} else {
-					update_status.append(
-						E('tr', { 'class': 'tr' }, [
-							E('td', { 'class': 'td left', 'style': 'width:33%' },
-								_('Last blacklist update') + ':'),
-							E('td', { 'class': 'td left' }, _('No data')),
-						])
-					);
-				};
-
-				if(Array.isArray(data.user_entries) && data.user_entries.length > 0) {
-					user_entries = E('table', { 'class': 'table' });
-					for(let i of data.user_entries) {
-						if(!i || typeof i.id !== 'string') continue;
-						user_entries.append(
-							E('tr', { 'class': 'tr' }, [
-								E('td', { 'class': 'td left', 'style': 'word-wrap:break-word' },
-									i.id.slice(0, 114) + (i.id.length > 115 ? '...' : '')),
-								E('td', { 'class': 'td left' },
-									`CIDR: ${i.cidr}, IP: ${i.ip}, FQDN: ${i.fqdn}`),
-							])
-						);
-					};
-				};
-
-				let nft_data = this.formatNftJson(data);
-
-				if(nft_data.rules) {
-					let table_rules = E('table', { 'class': 'table' }, [
-						E('tr', { 'class': 'tr table-titles' }, [
-							E('th', { 'class': 'th left', 'style': 'width:33%' },
-								_('Match-set')),
-							E('th', { 'class': 'th left' }, _('Description')),
-							E('th', { 'class': 'th left' }, _('Bytes')),
-						]),
-					]);
-
-					for(let [set, bytes, proto] of nft_data.rules) {
-						if(!set) {
-							continue;
-						};
-						table_rules.append(
-							E('tr', { 'class': 'tr' }, [
-								E('td',{
-									'class'     : 'td left',
-									'data-title': _('Match-set'),
-								}, set),
-								E('td', {
-									'class'     : 'td left',
-									'data-title': _('Description'),
-								}, this.formatRuleDescription(set, proto)),
-								E('td', {
-									'class'     : 'td left',
-									'id'        : this.ruleElementId(set, proto),
-									'data-title': _('Bytes'),
-								}, bytes),
-							])
-						);
-					};
-
-					rules = E([
-						E('h3', {}, _('Nftables rules')),
-						table_rules,
-					]);
-				};
-
-				if(nft_data.dnsmasq) {
-					let rdTableWrapper = E('div', {
-						'id'   : 'rdTableWrapper',
-						'style': 'width:100%',
-					}, this.makeDnsmasqTable(nft_data.dnsmasq, _('Dnsmasq')));
-					dnsmasq = rdTableWrapper;
-				};
-
-				if(nft_data.dnsmasq_user_instances) {
-					let rdsTableWrapper = E('div', {
-						'id'   : 'rdsTableWrapper',
-						'style': 'width:100%',
-					});
-
-					for(let i of nft_data.dnsmasq_user_instances) {
-						rdsTableWrapper.append(this.makeDnsmasqTable(i[1], _('Dnsmasq') + ' ' + i[0]));
-					};
-
-					if(nft_data.dnsmasq_user_instances.length > 0) {
-						dnsmasqUserInstances = rdsTableWrapper;
-					};
-				};
-
-				if(nft_data.dnsmasq_bypass) {
-					let rdbTableWrapper = E('div', {
-						'id'   : 'rdbTableWrapper',
-						'style': 'width:100%',
-					}, this.makeDnsmasqTable(nft_data.dnsmasq_bypass, _('Dnsmasq bypass')));
-					dnsmasqBypass = rdbTableWrapper;
-				};
-
-				poll.add(L.bind(this.pollInfo, this), this.pollInterval);
-			} else {
-				update_status = E('em', {}, _('Status') + ' : ' + _('disabled'));
-			};
-		};
-
-		let layout = [
+		return E([
 			E('h2', { 'class': 'fade-in' },
 				_('Ruantiblock') + ' - ' + _('Statistics')
 			),
 			E('div', { 'class': 'cbi-section-descr fade-in' }),
-			E('div', { 'class': 'cbi-section fade-in' },
-				E('div', { 'class': 'cbi-section-node' }, update_status)
-			),
-		];
-
-		if(user_entries) {
-			layout.push(
-				E('div', { 'class': 'cbi-section fade-in' }, [
-					E('h3', {}, _('User entries')),
-					E('div', { 'class': 'cbi-section-node' }, user_entries),
-				])
-			);
-		};
-
-		if(rules) {
-			layout.push(
-				E('div', { 'class': 'cbi-section fade-in' },
-					E('div', { 'class': 'cbi-section-node' }, rules)
-				)
-			);
-		};
-
-		if(dnsmasqBypass) {
-			layout.push(
-				E('div', { 'class': 'cbi-section fade-in' },
-					E('div', { 'class': 'cbi-section-node' }, dnsmasqBypass)
-				)
-			);
-		};
-
-		if(dnsmasqUserInstances) {
-			layout.push(
-				E('div', { 'class': 'cbi-section fade-in' },
-					E('div', { 'class': 'cbi-section-node' }, dnsmasqUserInstances)
-				)
-			);
-		};
-
-		if(dnsmasq) {
-			layout.push(
-				E('div', { 'class': 'cbi-section fade-in' },
-					E('div', { 'class': 'cbi-section-node' }, dnsmasq)
-				)
-			);
-		};
-
-		return E(layout);
+			statsContentWrapper,
+		]);
 	},
 
 	handleSave     : null,

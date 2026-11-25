@@ -2,12 +2,10 @@
 	"luci-app-ruantiblock": {
 		"description": "Grant access to ruantiblock procedures",
 		"read": {
-			"cgi-io": [ "exec" ],
+			"cgi-io": [ "exec", "download" ],
 			"file": {
 				"/usr/share/ruantiblock/version": [ "read" ],
 				"/usr/share/luci-app-ruantiblock/version": [ "read" ],
-				"/usr/libexec/luci-app-ruantiblock/check-updates": [ "exec" ],
-				"/usr/libexec/luci-app-ruantiblock/cancel-update-check": [ "exec" ],
 				"/usr/libexec/ruantiblock": [ "list" ],
 				"/etc/ruantiblock/fqdn_filter": [ "read" ],
 				"/etc/ruantiblock/ip_filter": [ "read" ],
@@ -18,11 +16,6 @@
 				"/var/run/ruantiblock.token": [ "read" ],
 				"/etc/tor/torrc": [ "read" ],
 				"/etc/crontabs/root": [ "read" ],
-				"/usr/bin/ruantiblock start": [ "exec" ],
-				"/usr/bin/ruantiblock stop": [ "exec" ],
-				"/usr/bin/ruantiblock restart": [ "exec" ],
-				"/usr/bin/ruantiblock destroy": [ "exec" ],
-				"/usr/bin/ruantiblock update": [ "exec" ],
 				"/usr/bin/ruantiblock raw-status": [ "exec" ],
 				"/usr/bin/ruantiblock vpn-route-status": [ "exec" ],
 				"/usr/bin/ruantiblock vpn-route-diagnostic": [ "exec" ],
@@ -39,7 +32,7 @@
 			},
 			"uci": [ "network", "ruantiblock" ],
 			"ubus": {
-				"luci": [ "getInitList", "setInitAction" ],
+				"luci": [ "getInitList" ],
 				"service": [ "list" ]
 			}
 		},
@@ -52,7 +45,17 @@
 				"/etc/ruantiblock/gr_excluded_nets": [ "write" ],
 				"/etc/ruantiblock/gr_excluded_sld": [ "write" ],
 				"/etc/tor/torrc": [ "write" ],
-				"/etc/crontabs/root": [ "write" ]
+				"/etc/crontabs/root": [ "write" ],
+				"/usr/libexec/luci-app-ruantiblock/check-updates": [ "exec" ],
+				"/usr/libexec/luci-app-ruantiblock/cancel-update-check": [ "exec" ],
+				"/usr/bin/ruantiblock start": [ "exec" ],
+				"/usr/bin/ruantiblock stop": [ "exec" ],
+				"/usr/bin/ruantiblock restart": [ "exec" ],
+				"/usr/bin/ruantiblock destroy": [ "exec" ],
+				"/usr/bin/ruantiblock update": [ "exec" ]
+			},
+			"ubus": {
+				"luci": [ "setInitAction" ]
 			},
 			"uci": [ "ruantiblock" ]
 		}

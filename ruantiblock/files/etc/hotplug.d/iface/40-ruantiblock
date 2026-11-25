@@ -10,28 +10,8 @@ if [ "$ACTION" = "ifup" ]; then
     USER_INSTANCE_VARS="U_ENABLED U_NAME U_PROXY_MODE U_TOR_TRANS_PORT U_ONION_DNS_ADDR U_IF_VPN U_VPN_GW_IP U_T_PROXY_TYPE U_T_PROXY_PORT_TCP U_T_PROXY_PORT_UDP U_T_PROXY_ALLOW_UDP U_T_PROXY_ALLOW_TCP U_ENTRIES_DNS U_ENTRIES_REMOTE U_ENABLE_ENTRIES_REMOTE_PROXY U_ENABLE_FPROXY U_FPROXY_LIST U_CLIENT_FILTER U_CLIENT_IPS"
     USER_INSTANCES_MAX=10
     DEBUG=0
+    IF_VPN="tun0"
     IF_VPN_CURRENT=""
-
-    ruab_route_status=$($RUAB_CMD raw-status)
-    case "$ruab_route_status" in
-        0) ;;
-        1|2) exit 0 ;;
-        3|4)
-            _wait=0
-            while [ $_wait -lt 30 ]
-            do
-                sleep 1
-                ruab_route_status=$($RUAB_CMD raw-status)
-                case "$ruab_route_status" in
-                    0) break ;;
-                    1|2) exit 0 ;;
-                esac
-                _wait=$(($_wait + 1))
-            done
-            [ "$ruab_route_status" = "0" ] || exit 0
-        ;;
-        *) exit 0 ;;
-    esac
 
     UCI_CMD="$(which uci)"
     if [ $? -ne 0 ]; then
@@ -57,7 +37,7 @@ if [ "$ACTION" = "ifup" ]; then
 
     PROXY_MODE=$($UCI_CMD -q get ruantiblock.config.proxy_mode)
     if [ "$PROXY_MODE" = "2" ]; then
-        IF_VPN_CURRENT=$($UCI_CMD -q get ruantiblock.config.if_vpn)
+        IF_VPN_CURRENT=$($UCI_CMD -q get ruantiblock.config.if_vpn || printf '%s' "$IF_VPN")
     fi
 
     _iface_matches() {
@@ -74,14 +54,16 @@ if [ "$ACTION" = "ifup" ]; then
         for inst in $(GetUserInstances 2)
         do
             IncludeUserInstanceVars "$inst"
-            if _iface_matches "$U_IF_VPN"; then
-                IF_VPN_CURRENT="$U_IF_VPN"
+            _inst_if_vpn="${U_IF_VPN:-$IF_VPN}"
+            if _iface_matches "$_inst_if_vpn"; then
+                IF_VPN_CURRENT="$_inst_if_vpn"
 
                 if [ $DEBUG -ge 1 ]; then
-                    echo "  ruantiblock-vpn-iface-script: U_NAME=${U_NAME} U_IF_VPN=${U_IF_VPN}" >&2
-                    logger -p "user.debug" -t "ruantiblock-hotplug-script" "U_NAME=${U_NAME} U_IF_VPN=${U_IF_VPN}"
+                    echo "  ruantiblock-vpn-iface-script: U_NAME=${U_NAME} U_IF_VPN=${_inst_if_vpn}" >&2
+                    logger -p "user.debug" -t "ruantiblock-hotplug-script" "U_NAME=${U_NAME} U_IF_VPN=${_inst_if_vpn}"
                 fi
 
+                ClearUserInstanceVars
                 break
             fi
             ClearUserInstanceVars
@@ -95,6 +77,25 @@ if [ "$ACTION" = "ifup" ]; then
         fi
 
         (
+            ruab_route_status=$($RUAB_CMD raw-status)
+            case "$ruab_route_status" in
+                0) ;;
+                3|4)
+                    _wait=0
+                    while [ $_wait -lt 30 ]
+                    do
+                        sleep 1
+                        ruab_route_status=$($RUAB_CMD raw-status)
+                        case "$ruab_route_status" in
+                            0) break ;;
+                            1|2) exit 0 ;;
+                        esac
+                        _wait=$(($_wait + 1))
+                    done
+                    [ "$ruab_route_status" = "0" ] || exit 0
+                ;;
+                *) exit 0 ;;
+            esac
             sleep 5
             $RUAB_CMD reload
         ) </dev/null >/dev/null 2>&1 &

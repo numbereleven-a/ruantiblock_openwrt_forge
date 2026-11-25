@@ -8,15 +8,21 @@ APP_EXEC="/usr/bin/ruantiblock"
 VPN_ROUTE_RECOVERY_NEEDED=0
 
 CheckIfaceStatus() {
-    local _iface="$1" _ret_val=0
-    if [ -z "$($IP_CMD link show dev $_iface up 2> /dev/null)" ]; then
+    local _iface="$1" _vpn_gw_ip="$2" _ret_val=0
+    if [ -z "$_iface" ] || [ -z "$($IP_CMD link show dev "$_iface" up 2> /dev/null)" ]; then
         _ret_val=1
 
         if [ $DEBUG -ge 1 ]; then
             echo "  ruab_route_check.GetVpnRouteStatus: ${_iface} disabled" >&2
             logger -p "user.debug" -t "ruantiblock" "ruab_route_check.GetVpnRouteStatus: iface ${_iface} disabled"
         fi
+    elif [ -z "$_vpn_gw_ip" ] && ! $IP_CMD -4 addr list dev "$_iface" 2> /dev/null | $AWK_CMD 'BEGIN {code=1} /inet/ {code=0; exit} END {exit code}'; then
+        _ret_val=1
 
+        if [ $DEBUG -ge 1 ]; then
+            echo "  ruab_route_check.GetVpnRouteStatus: ${_iface} has no IPv4 address" >&2
+            logger -p "user.debug" -t "ruantiblock" "ruab_route_check.GetVpnRouteStatus: iface ${_iface} has no IPv4 address"
+        fi
     fi
     return $_ret_val
 }
@@ -36,7 +42,7 @@ GetVpnRouteStatus() {
         IncludeUserInstanceVars "$_inst"
         if ! VpnRouteInstanceStatus $(($VPN_ROUTE_TABLE_ID_START + $_i)); then
             _ret_val=1
-            if CheckIfaceStatus "${U_IF_VPN:-$INSTANCES_DEF_IF_VPN}"; then
+            if CheckIfaceStatus "${U_IF_VPN:-$INSTANCES_DEF_IF_VPN}" "$U_VPN_GW_IP"; then
                 VPN_ROUTE_RECOVERY_NEEDED=1
             fi
         fi
@@ -46,7 +52,7 @@ GetVpnRouteStatus() {
     if MainInstanceNeedsVpnRouteCheck; then
         if ! VpnRouteInstanceStatus $VPN_ROUTE_TABLE_ID_START; then
             _ret_val=1
-            if CheckIfaceStatus "$IF_VPN"; then
+            if CheckIfaceStatus "$IF_VPN" "$VPN_GW_IP"; then
                 VPN_ROUTE_RECOVERY_NEEDED=1
             fi
         fi

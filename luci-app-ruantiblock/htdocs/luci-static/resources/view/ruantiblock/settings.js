@@ -13,9 +13,11 @@ const USER_INSTANCES_DEFAULT = 10;
 const USER_INSTANCES_HARD_MAX = 50;
 
 return view.extend({
-	parsers       : {},
+	parsers                 : {},
 
-	appStatusCode : null,
+	appStatusCode           : null,
+
+	pendingRemovedUserLists : null,
 
 	depends(elem, key, array, empty=true) {
 		if(empty && array.length === 0) {
@@ -32,14 +34,14 @@ return view.extend({
 
 		let match = String(value).match(/^((?:[0-9]{1,3}\.){3}[0-9]{1,3})(?:#([0-9]{1,5}))?$/);
 		let validIp = match && match[1].split('.').every(e => Number(e) <= 255);
-		let validPort = match && (!match[2] || Number(match[2]) <= 65535);
+		let validPort = match && (!match[2] || (Number(match[2]) >= 1 && Number(match[2]) <= 65535));
 
 		return (validIp && validPort) ? true : _('Expecting:')
 			+ ` ${_('One of the following:')}\n - ${_('valid IP address')}\n - ${_('valid address#port')}\n`;
 	},
 
 	validateUrl(section, value) {
-		return (/^$|^https?:\/\/[\w.-]+(:[0-9]{2,5})?((\/|\?).*)?$/.test(value)) ? true : _('Expecting:')
+		return (/^$|^https?:\/\/[\w.-]+(:[0-9]{2,5})?((\/|\?)\S*)?$/.test(value)) ? true : _('Expecting:')
 			+ ` ${_('valid URL')}\n`;
 	},
 
@@ -125,6 +127,10 @@ return view.extend({
 				return Promise.reject(new Error(_('Unable to read the contents')));
 
 			return fs.write(this.file, formvalue).then(rc => {
+				let targetId = (this.section && this.section.section) || section_id;
+				if(this.ctx && this.ctx.pendingRemovedUserLists && targetId) {
+					this.ctx.pendingRemovedUserLists.delete(targetId);
+				};
 				ui.addNotification(null, E('p', _('Contents have been saved.')),
 					'info');
 				if(this.callback) {
@@ -139,6 +145,13 @@ return view.extend({
 
 		load() {
 			this.readFailed = true;
+			let sectionId = this.section && this.section.section;
+			if(this.ctx && this.ctx.pendingRemovedUserLists && sectionId &&
+				this.ctx.pendingRemovedUserLists.has(sectionId)) {
+				this.content = '';
+				this.readFailed = false;
+				return Promise.resolve();
+			};
 			return fs.read_direct(this.file).catch(e => {
 				if(e.name === 'NotFoundError')
 					return '';
@@ -170,7 +183,7 @@ return view.extend({
 			let max = Number(this.userInstancesMaxOption.formvalue('config'))
 				|| USER_INSTANCES_DEFAULT;
 
-			max = Math.min(Math.max(max, 1), USER_INSTANCES_HARD_MAX);
+			max = Math.min(Math.max(Math.floor(max), 1), USER_INSTANCES_HARD_MAX);
 			this.map.data.set(this.map.config, 'config', 'user_instances_max', String(max));
 
 			for(let i = 1; i <= max; i++) {
@@ -189,6 +202,15 @@ return view.extend({
 			};
 
 			return this.super('handleAdd', [ ev, section_id ]);
+		},
+
+		handleRemove(section_id, ev) {
+			return Promise.resolve(this.super('handleRemove', [ section_id, ev ])).then(res => {
+				if(/^list\d+$/.test(section_id) && this.ownerView && this.ownerView.pendingRemovedUserLists) {
+					this.ownerView.pendingRemovedUserLists.add(section_id);
+				};
+				return res;
+			});
 		},
 	}),
 
@@ -212,6 +234,18 @@ return view.extend({
 			return;
 		};
 		this.appStatusCode = data[0].code;
+		this.pendingRemovedUserLists = new Set();
+		if(typeof(document) === 'object' && document && document.addEventListener) {
+			if(this.onUciReverted) {
+				document.removeEventListener('uci-reverted', this.onUciReverted);
+			};
+			this.onUciReverted = () => {
+				if(this.pendingRemovedUserLists) {
+					this.pendingRemovedUserLists.clear();
+				};
+			};
+			document.addEventListener('uci-reverted', this.onUciReverted);
+		};
 		let p_dir_arr      = data[1];
 		let coreVersion    = tools.normalizeValue(data[2]) || '-';
 		let luciVersion    = tools.normalizeValue(data[3]) || '-';
@@ -249,14 +283,14 @@ return view.extend({
 			tools.ipFilterFile,
 			_('IP filter'),
 			_('Patterns can be strings or regular expressions. Each pattern in a separate line, the <code>#</code> symbol in the first position of a line will comment out the line.<br />Examples (dot is a special character):') +
-				'<br /><code>#comment<br /><code>128[.]199[.]0[.]0/16<br />34[.]217[.]90[.]52<br />162[.]13[.]190[.]</code>'
+				'<br /><code>#comment<br />128[.]199[.]0[.]0/16<br />34[.]217[.]90[.]52<br />162[.]13[.]190[.]</code>'
 		);
 
 		let fqdn_filter_edit = new tools.fileEditDialog(
 			tools.fqdnFilterFile,
 			_('FQDN filter'),
 			_('Patterns can be strings or regular expressions. Each pattern in a separate line, the <code>#</code> symbol in the first position of a line will comment out the line.<br />Examples:') +
-				'<br /><code>#comment<br /><code>poker<br />[ck]?a[sz]ino?<br />[vw]ulkan<br />slots?</code>'
+				'<br /><code>#comment<br />poker<br />[ck]?a[sz]ino?<br />[vw]ulkan<br />slots?</code>'
 		);
 
 		let bypass_entries_edit = new tools.fileEditDialog(
@@ -431,7 +465,7 @@ return view.extend({
 		Object.values(blacklistPresets).forEach(v => { bllist_sources[v[0]] = v[2] });
 		Object.entries(bllist_sources).forEach(e => {
 			if(e[1]) {
-				bllist_preset.description += `<br />${e[0]} - <a href="${e[1]}" target="_blank">${e[1]}</a>`;
+				bllist_preset.description += `<br />${e[0]} - <a href="${e[1]}" target="_blank" rel="noopener noreferrer">${e[1]}</a>`;
 			};
 		});
 
@@ -661,6 +695,7 @@ return view.extend({
 		o = s.taboption('user_entries_tab', form.SectionValue, 'user_instance', this.CBIUserInstancesGrid,
 			'user_instance');
 		ss = o.subsection;
+		ss.ownerView = this;
 		ss.userInstancesMaxOption = user_instances_max;
 		ss.addremove      = true;
 		ss.anonymous      = true;
@@ -878,13 +913,29 @@ return view.extend({
 			this.updateChecker.cancel();
 			this.updateChecker = null;
 		};
+		if(this.onUciReverted && typeof(document) === 'object' && document && document.removeEventListener) {
+			document.removeEventListener('uci-reverted', this.onUciReverted);
+			this.onUciReverted = null;
+		};
 	},
 
 	handleSaveApply(ev, mode) {
 		return this.handleSave(ev).then(() => {
 			return Promise.resolve(ui.changes.apply(mode == '0'));
 		}).then(() => {
-			if(this.appStatusCode != 1 && this.appStatusCode != 2) {
+			if(this.pendingRemovedUserLists && this.pendingRemovedUserLists.size > 0) {
+				let toClear = Array.from(this.pendingRemovedUserLists);
+				this.pendingRemovedUserLists.clear();
+				return Promise.all(toClear.map(id =>
+					fs.write(`${tools.userListsDir}/${id}`, '').catch(() => {})
+				));
+			};
+		}).then(() => {
+			return L.resolveDefault(fs.exec(tools.execPath, [ 'raw-status' ]), { code: this.appStatusCode });
+		}).then(res => {
+			let statusCode = (res && typeof(res.code) === 'number') ? res.code : this.appStatusCode;
+			this.appStatusCode = statusCode;
+			if(statusCode != 1 && statusCode != 2) {
 				return fs.exec_direct(tools.execPath, [ 'restart' ]);
 			};
 		});

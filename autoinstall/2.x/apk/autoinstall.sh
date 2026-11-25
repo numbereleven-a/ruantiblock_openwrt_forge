@@ -10,7 +10,7 @@ LUCI_APP=1
 HTTPS_DNS_PROXY=1
 
 OWRT_VERSION="25.12"
-RUAB_VERSION="2.1.20-r6"
+RUAB_VERSION="2.3.0-r1"
 RELEASE_BASE_URL="https://github.com/numbereleven-a/ruantiblock_openwrt_forge/releases/download/${RUAB_VERSION}"
 PKG_DIR=""
 trap '[ -n "$PKG_DIR" ] && rm -rf "$PKG_DIR"' EXIT HUP INT TERM
@@ -142,7 +142,7 @@ BackupFile() {
 BackupCurrentConfig() {
     local _file
     MakeDir "$BACKUP_DIR"
-    for _file in $(ls -1 "$CONFIG_DIR" | grep -v "$(basename $BACKUP_DIR_BASE)*")
+    for _file in $(ls -1 "$CONFIG_DIR" 2>/dev/null | grep -Fv "$(basename "$BACKUP_DIR_BASE")")
     do
         cp -af "${CONFIG_DIR}/${_file}" "${BACKUP_DIR}/${_file}"
     done
@@ -242,7 +242,7 @@ InstallTorConfig() {
     $UCI_CMD set ruantiblock.config.proxy_mode="1"
     $UCI_CMD commit ruantiblock
     # dnsmasq rebind protection
-    if $UCI_CMD get dhcp.@dnsmasq[0].rebind_domain | $AWK_CMD '{for(i=1; i<=NF; i++){if($i == "onion") exit 1}}'; then
+    if $UCI_CMD -q get dhcp.@dnsmasq[0].rebind_domain | $AWK_CMD '{for(i=1; i<=NF; i++){if($i == "onion") exit 1}}'; then
         $UCI_CMD add_list dhcp.@dnsmasq[0].rebind_domain='onion'
         $UCI_CMD commit dhcp
     fi

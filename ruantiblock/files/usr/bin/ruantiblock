@@ -248,7 +248,7 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 export WGET_CMD
-export WGET_PARAMS="--no-check-certificate -q -O"
+export WGET_PARAMS="-q -O"
 NSLOOKUP_CMD="$(which nslookup)"
 if [ $? -ne 0 ]; then
     echo " Error! Nslookup doesn't exists" >&2
@@ -433,6 +433,96 @@ DownloadNativeBlacklist() {
         echo " Native blacklist configuration error (${1})" >&2
         MakeLogRecord "err" "Native blacklist configuration error (${1})"
         return 1
+    fi
+    if [ $_return_code -eq 0 ]; then
+        if ! $AWK_CMD -v NFT_TABLE="$NFT_TABLE" -v NFTSET_CIDR="$NFTSET_CIDR" -v NFTSET_IP="$NFTSET_IP" '
+            BEGIN { in_table = 0; seen_table = 0; failed = 0; }
+            { sub(/\r$/, "", $0); }
+            /^[[:space:]]*$/ { next }
+            !in_table && ($0 == ("flush set " NFT_TABLE " " NFTSET_CIDR) || $0 == ("flush set " NFT_TABLE " " NFTSET_IP)) { next }
+            !in_table && $0 == ("table " NFT_TABLE " {") { in_table = 1; seen_table = 1; next }
+            in_table && $0 == "}" { in_table = 0; next }
+            in_table {
+                prefix = "";
+                if (index($0, "set " NFTSET_CIDR " {") == 1) {
+                    prefix = "set " NFTSET_CIDR " {";
+                } else if (index($0, "set " NFTSET_IP " {") == 1) {
+                    prefix = "set " NFTSET_IP " {";
+                } else {
+                    failed = 1; exit 1;
+                }
+                if (substr($0, length($0), 1) != "}") {
+                    failed = 1; exit 1;
+                }
+                body = substr($0, length(prefix) + 1, length($0) - length(prefix) - 1);
+                elem_pos = index(body, "elements={");
+                if (elem_pos > 0) {
+                    opts = substr(body, 1, elem_pos - 1);
+                    elem_tail = substr(body, elem_pos + 10);
+                    if (substr(elem_tail, length(elem_tail) - 1, 2) != "};") {
+                        failed = 1; exit 1;
+                    }
+                    elems = substr(elem_tail, 1, length(elem_tail) - 2);
+                    if (length(elems) > 0 && elems !~ /^[0-9.,\/]+$/) {
+                        failed = 1; exit 1;
+                    }
+                } else {
+                    opts = body;
+                }
+                if (opts ~ /[{}]/) {
+                    failed = 1; exit 1;
+                }
+                n = split(opts, parts, ";");
+                if (n < 2 || parts[1] != "type ipv4_addr" || parts[n] != "") {
+                    failed = 1; exit 1;
+                }
+                for (k = 2; k < n; k++) {
+                    if (parts[k] !~ /^(size [0-9]+|policy (memory|performance)|flags (interval|dynamic|timeout|auto-merge)(,(interval|dynamic|timeout|auto-merge))*|auto-merge|timeout [0-9]+[smhd])$/) {
+                        failed = 1; exit 1;
+                    }
+                }
+                next;
+            }
+            { failed = 1; exit 1 }
+            END { if (failed || in_table || !seen_table) exit 1 }
+        ' "$_ip_data_file"; then
+            echo " Error! Invalid native nftables data file" >&2
+            MakeLogRecord "err" "Error! Invalid native nftables data file"
+            _return_code=1
+        fi
+    fi
+    if [ $_return_code -eq 0 ]; then
+        if ! $AWK_CMD -v NFT_TABLE_DNSMASQ="$NFT_TABLE_DNSMASQ" -v NFTSET_DNSMASQ="$NFTSET_DNSMASQ" '
+            BEGIN {
+                target = "/" NFT_TABLE_DNSMASQ "#" NFTSET_DNSMASQ;
+                target_len = length(target);
+                failed = 0;
+            }
+            { sub(/\r$/, "", $0); }
+            /^[[:space:]]*($|#)/ { next }
+            index($0, "nftset=/") == 1 {
+                if (length($0) <= 8 + target_len || substr($0, length($0) - target_len + 1) != target) {
+                    failed = 1; exit 1;
+                }
+                dom = substr($0, 9, length($0) - 8 - target_len);
+                if (dom !~ /^[A-Za-z0-9._-]+(\/[A-Za-z0-9._-]+)*$/) {
+                    failed = 1; exit 1;
+                }
+                next;
+            }
+            index($0, "server=/") == 1 {
+                if ($0 !~ /^server=\/[A-Za-z0-9._-]+\/[0-9]{1,3}(\.[0-9]{1,3}){3}(#[0-9]{1,5})?$/) {
+                    failed = 1; exit 1;
+                }
+                next;
+            }
+            { failed = 1; exit 1 }
+            END { if (failed) exit 1 }
+        ' "$_dnsmasq_data_file"; then
+            echo " Error! Invalid native dnsmasq data file" >&2
+            MakeLogRecord "err" "Error! Invalid native dnsmasq data file"
+            _return_code=1
+        fi
     fi
     if [ $_return_code -eq 0 ]; then
         mv -f "$_ip_data_file" "$IP_DATA_FILE"
@@ -1011,8 +1101,8 @@ AddBypassEntries() {
                     delete fqdn_array;
                     default_dns = ENVIRON["BYPASS_ENTRIES_DNS"];
                     if(length(default_dns)) {
-                        split(default_dns, default_parts, "#");
-                        if(!validIP(default_parts[1]) || (length(default_parts[2]) && (default_parts[2] !~ /^[0-9]+$/ || default_parts[2] + 0 > 65535))) failed = 1;
+                        default_dns_count = split(default_dns, default_parts, "#");
+                        if(default_dns_count > 2 || !validIP(default_parts[1]) || (default_dns_count == 2 && (default_parts[2] !~ /^[0-9]+$/ || default_parts[2] + 0 < 1 || default_parts[2] + 0 > 65535))) failed = 1;
                     };
                 }
                 function writeIpList(array,  _str) {
@@ -1045,16 +1135,17 @@ AddBypassEntries() {
                 };
                 ($0 !~ /^([\040\011]*$|#)/) {
                     sub("\015", "", $0);
+                    $0 = tolower($0);
                     if($0 ~ /^[0-9]{1,3}([.][0-9]{1,3}){3}([\057][0-9]{1,2})?$/) {
                         split($0, cidr, "/");
                         if(!validIP(cidr[1]) || (length(cidr[2]) && cidr[2] + 0 > 32)) { failed = 1; next; };
                         ip_array[$0];
                     }
-                    else if($0 ~ /^([a-z0-9._-]+[.])*([a-z]{2,}|xn--[a-z0-9]+)([ ][0-9]{1,3}([.][0-9]{1,3}){3}([#][0-9]{2,5})?)?$/) {
+                    else if($0 ~ /^([a-z0-9._-]+[.])*([a-z]{2,}|xn--[a-z0-9]+)([ ][0-9]{1,3}([.][0-9]{1,3}){3}([#][0-9]{1,5})?)?$/) {
                         split($0, entry, " ");
                         if(length(entry[2])) {
-                            split(entry[2], dns, "#");
-                            if(!validIP(dns[1]) || (length(dns[2]) && dns[2] + 0 > 65535)) { failed = 1; next; };
+                            dns_count = split(entry[2], dns, "#");
+                            if(dns_count > 2 || !validIP(dns[1]) || (dns_count == 2 && (dns[2] !~ /^[0-9]+$/ || dns[2] + 0 < 1 || dns[2] + 0 > 65535))) { failed = 1; next; };
                         };
                         fqdn_array[$0];
                     };
@@ -1361,6 +1452,8 @@ EnsureVpnRouteMonitor() {
             ClearStalePidFile "$ROUTE_CHECK_PID_FILE"
             "$ROUTE_CHECK_EXEC" start </dev/null >/dev/null 2>&1 &
         fi
+    elif [ -x "$ROUTE_CHECK_EXEC" ] && PidFileActive "$ROUTE_CHECK_PID_FILE"; then
+        "$ROUTE_CHECK_EXEC" stop >/dev/null 2>&1
     fi
 }
 
@@ -1501,7 +1594,7 @@ Stop() {
 }
 
 Reload() {
-    local _i=0 _attempts=60 _return_code=0
+    local _i=0 _attempts=60 _return_code=0 _inst _suffix
     if CheckStatus; then
         MakeToken
         while PidFileActive "$START_PID_FILE"
@@ -1526,8 +1619,26 @@ Reload() {
 
         echo " ${NAME} reload..."
         DeleteNftRules >/dev/null 2>&1
-        AddNftRules >/dev/null 2>&1 || _return_code=1
+        for _inst in $USER_INSTANCES_ALL " "
+        do
+            if [ "$_inst" = " " ]; then
+                _suffix=""
+            else
+                _suffix=".${_inst}"
+            fi
+            FlushNftSets "clients${_suffix}" "${NFTSET_FPROXY}${_suffix}"
+        done
+        AddInstancesNftSets >/dev/null 2>&1 || _return_code=1
+        if [ $_return_code -eq 0 ]; then
+            AddNftRules >/dev/null 2>&1 || _return_code=1
+        fi
         UpdateLocalIpSets || _return_code=1
+        if [ $_return_code -eq 0 ]; then
+            MakeInstancesCache
+        else
+            DeleteInstancesCache
+            MakeLogRecord "err" "Reload failed"
+        fi
         EnsureVpnRouteMonitor
         MakeToken
         return $_return_code
@@ -1704,25 +1815,27 @@ case "$1" in
     ;;
     raw-status)
         Init
-        CheckStatus
-        return_code=$?
-        case $return_code in
-            0)
-                if PidFileActive "$START_PID_FILE"; then
-                    return_code=3
-                    echo 3
-                elif PidFileActive "$U_PID_FILE"; then
-                    return_code=4
-                    echo 4
-                else
-                    echo 0
-                fi
-            ;;
-            *)
-                return_code=2
-                echo 2
-            ;;
-        esac
+        if PidFileActive "$START_PID_FILE"; then
+            return_code=3
+            echo 3
+        else
+            CheckStatus
+            return_code=$?
+            case $return_code in
+                0)
+                    if PidFileActive "$U_PID_FILE"; then
+                        return_code=4
+                        echo 4
+                    else
+                        echo 0
+                    fi
+                ;;
+                *)
+                    return_code=2
+                    echo 2
+                ;;
+            esac
+        fi
     ;;
     vpn-route-status)
         Init

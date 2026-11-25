@@ -5,8 +5,8 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=ruantiblock
-PKG_VERSION:=2.1.20
-PKG_RELEASE:=6
+PKG_VERSION:=2.3.0
+PKG_RELEASE:=1
 PKG_MAINTAINER:=numbereleven-a <https://github.com/numbereleven-a/ruantiblock_openwrt_forge>
 
 include $(INCLUDE_DIR)/package.mk
@@ -17,7 +17,7 @@ define Package/$(PKG_NAME)
   TITLE:=Ruantiblock
   URL:=https://github.com/numbereleven-a/ruantiblock_openwrt_forge
   PKGARCH:=all
-  DEPENDS:=+dnsmasq-full +kmod-nft-tproxy +nftables-json
+  DEPENDS:=+dnsmasq-full +kmod-nft-tproxy +nftables-json +ca-bundle
 endef
 
 define Package/$(PKG_NAME)/description
@@ -146,7 +146,7 @@ DNSMASQ_DATA_FILE_BYPASS_TMP="$${DNSMASQ_DATA_FILE_BYPASS}.tmp"
 DNSMASQ_DATA_FILE_USER_INSTANCES_TMP="$${DNSMASQ_DATA_FILE_USER_INSTANCES}.tmp"
 DNSMASQ_DATA_FILE_TMP="$${DNSMASQ_DATA_FILE}.tmp"
 
-if [ "$$1" = "upgrade" ]; then
+if [ "$$PKG_UPGRADE" = "1" ] || [ "$$1" = "upgrade" ] || [ "$$2" = "upgrade" ]; then
 	if [ -e "$$FILE_INIT_SCRIPT" ]; then
 		if "$$FILE_INIT_SCRIPT" enabled 2>/dev/null; then
 			printf 'enabled\n' > "$$STATE_FILE"

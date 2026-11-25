@@ -20,6 +20,9 @@ fi
 TMP_FILE="$(mktemp -t ruantiblock-update.XXXXXX 2>/dev/null)" || exit 1
 
 cleanup() {
+	if [ -n "$FETCH_PID" ] && [ "$(cat "/proc/${FETCH_PID}/comm" 2>/dev/null)" = "uclient-fetch" ]; then
+		kill "$FETCH_PID" 2>/dev/null || true
+	fi
 	if [ -n "$FETCH_PID" ] && [ -r "$PID_FILE" ] &&
 		[ "$(cat "$PID_FILE" 2>/dev/null)" = "$FETCH_PID" ]; then
 		rm -f "$PID_FILE"

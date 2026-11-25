@@ -104,5 +104,17 @@ check monitor-starts-for-first-vpn grep -q '^start$' "$ROUTE_LOG"
 EnsureVpnRouteMonitor
 wait
 check monitor-not-duplicated test "$(wc -l < "$ROUTE_LOG")" -eq 1
+USER_INSTANCES_VPN=''
+EnsureVpnRouteMonitor
+check monitor-stops-when-unused grep -q '^stop$' "$ROUTE_LOG"
+(
+    load_function "$ROOT/usr/libexec/ruantiblock/ruab_route_check" CheckIfaceStatus
+    AWK_CMD=awk
+    IP_CMD="$WORK/fake-ip-no-v4"
+    printf '#!/bin/sh\n[ "$1" = link ] && echo "5: tun0: <UP>" && exit 0\nexit 0\n' > "$IP_CMD"
+    chmod +x "$IP_CMD"
+    ! CheckIfaceStatus tun0 "" && CheckIfaceStatus tun0 "198.51.100.1"
+)
+check up-iface-without-ipv4-skips-reload test "$?" -eq 0
 printf 'FAILED=%s\n' "$FAILED"
 test "$FAILED" -eq 0

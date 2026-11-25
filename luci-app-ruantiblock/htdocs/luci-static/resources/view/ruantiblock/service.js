@@ -119,8 +119,9 @@ return view.extend({
 
 		handleApply(ev) {
 			this.cancelButton.disabled = true;
-			return this.context.appAction('destroy').then(() => {
-				if(this.dnsmasqCfgDirsSelect.value !== this.currentDnsmasqCfgDir) {
+			return this.context.appAction('destroy').then(ok => {
+				if(ok && this.dnsmasqCfgDirsSelect.value &&
+					this.dnsmasqCfgDirsSelect.value !== this.currentDnsmasqCfgDir) {
 					uci.set(tools.appName, 'config', 'dnsmasq_confdir',
 							this.dnsmasqCfgDirsSelect.value);
 					return uci.save().then(() => uci.apply());
@@ -165,10 +166,14 @@ return view.extend({
 		let btn_destroy = elems[4] || document.getElementById('btn_destroy');
 		let btn_enable  = elems[2] || document.getElementById('btn_enable');
 		let btn_update  = elems[3] || document.getElementById('btn_update');
+		let btn_restart = elems[5] || document.getElementById('btn_restart');
 
 		btn_start.disabled   = bool;
 		btn_update.disabled  = bool;
 		btn_destroy.disabled = bool;
+		if(btn_restart) {
+			btn_restart.disabled = bool;
+		};
 		if(btn === btn_update) {
 			btn_enable.disabled = false;
 		} else {
@@ -241,6 +246,7 @@ return view.extend({
 		let btn_start   = elems[1] || document.getElementById('btn_start');
 		let btn_update  = elems[3] || document.getElementById('btn_update');
 		let btn_destroy = elems[4] || document.getElementById('btn_destroy');
+		let btn_restart = elems[5] || document.getElementById('btn_restart');
 
 		let btnStartStateOn = () => {
 			btn_start.onclick	 = ui.createHandlerFn(
@@ -261,11 +267,17 @@ return view.extend({
 			btnStartStateOn();
 			btn_destroy.disabled = false;
 			btn_update.disabled  = false;
+			if(btn_restart) {
+				btn_restart.disabled = false;
+			};
 		}
 		else if(app_status_code == 2) {
 			this.disableButtons(false, null, elems);
 			btnStartStateOff();
 			btn_update.disabled = true;
+			if(btn_restart) {
+				btn_restart.disabled = true;
+			};
 		}
 		else if(app_status_code == 3) {
 			btnStartStateOff();
@@ -319,13 +331,14 @@ return view.extend({
 	},
 
 	appAction(action, button) {
-		if(button) {
-			let elem = document.getElementById(button);
+		let elem = button ? document.getElementById(button) : null;
+		if(elem) {
 			this.disableButtons(true, elem);
 		};
 
 		this.actionInProgress = true;
 		let seq = ++this.actionSeq;
+		let keepDisabled = false;
 		poll.stop();
 
 		if(action === 'update') {
@@ -340,14 +353,42 @@ return view.extend({
 			return this.getAppStatus().then(
 				(status_array) => {
 					if(status_array) {
+						let code = status_array[0].code;
+						let actionFailed =
+							((action === 'start' || action === 'restart') && code != 0 && code != 3 && code != 4) ||
+							((action === 'stop' || action === 'destroy') && code == 0);
 						this.setAppStatus(status_array);
+						keepDisabled = Boolean(elem && elem.disabled);
+						if(actionFailed) {
+							ui.addNotification(null, E('p', _('Service action failed "%s %s": %s')
+								.format(tools.appName, action, _('Command failed'))));
+							return false;
+						};
 					};
+					return true;
 				}
 			);
+		}).catch(e => {
+			ui.addNotification(null, E('p', _('Service action failed "%s %s": %s')
+				.format(tools.appName, action, e.message || e)));
+			return this.getAppStatus().then(status_array => {
+				if(status_array) {
+					this.setAppStatus(status_array);
+					keepDisabled = Boolean(elem && elem.disabled);
+				};
+				return false;
+			}).catch(() => false);
 		}).finally(() => {
 			this.actionInProgress = false;
 			this.statusTokenValue = null;
 			poll.start();
+			if(keepDisabled && elem) {
+				setTimeout(() => {
+					if(this.actionSeq === seq && !this.actionInProgress) {
+						elem.disabled = true;
+					};
+				}, 0);
+			};
 		});
 	},
 
@@ -425,6 +466,16 @@ return view.extend({
 		}, _('Enable'));
 		layout_append(btn_start, _('Service'));
 
+		let btn_restart = E('button', {
+			'id'   : 'btn_restart',
+			'name' : 'btn_restart',
+			'class': btn_style_action,
+		}, _('Restart'));
+		btn_restart.onclick = ui.createHandlerFn(this, () => {
+			return this.appAction('restart', 'btn_restart');
+		});
+		layout_append(btn_restart, _('Restart service'));
+
 		let btn_enable = E('button', {
 			'id'   : 'btn_enable',
 			'name' : 'btn_enable',
@@ -437,7 +488,9 @@ return view.extend({
 			'name' : 'btn_update',
 			'class': btn_style_action,
 		}, _('Update'));
-		btn_update.onclick = ui.createHandlerFn(this, () => { this.appAction('update', 'btn_update') });
+		btn_update.onclick = ui.createHandlerFn(this, () => {
+			return this.appAction('update', 'btn_update');
+		});
 		layout_append(btn_update, _('Update blacklist'));
 
 		let btn_destroy = E('button', {
@@ -456,6 +509,7 @@ return view.extend({
 			btn_enable,
 			btn_update,
 			btn_destroy,
+			btn_restart,
 		]);
 
 		poll.add(L.bind(this.statusPoll, this));

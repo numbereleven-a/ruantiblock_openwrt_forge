@@ -63,7 +63,7 @@ RemoveFile() {
 BackupCurrentConfig() {
     local _file
     MakeDir "$BACKUP_DIR"
-    for _file in $(ls -1 "$CONFIG_DIR" | grep -v "$(basename $BACKUP_DIR_BASE)*")
+    for _file in $(ls -1 "$CONFIG_DIR" 2>/dev/null | grep -Fv "$(basename "$BACKUP_DIR_BASE")")
     do
         cp -af "${CONFIG_DIR}/${_file}" "${BACKUP_DIR}/${_file}"
     done
@@ -112,12 +112,14 @@ RemoveAppFiles() {
     RemoveFile "$FILE_BYPASS_ENTRIES"
     RemoveFile "$FILE_GR_EXCLUDED_SLD"
     RemoveFile "$FILE_GR_EXCLUDED_NETS"
-    RemoveFile "${FILE_UCI_CONFIG}.opkg"
-    RemoveFile "${FILE_CONFIG}.opkg"
-    RemoveFile "${FILE_FQDN_FILTER}.opkg"
-    RemoveFile "${FILE_IP_FILTER}.opkg"
-    RemoveFile "${FILE_USER_ENTRIES}.opkg"
-    RemoveFile "${FILE_BYPASS_ENTRIES}.opkg"
+    RemoveFile "${FILE_UCI_CONFIG}-opkg"
+    RemoveFile "${FILE_CONFIG}-opkg"
+    RemoveFile "${FILE_FQDN_FILTER}-opkg"
+    RemoveFile "${FILE_IP_FILTER}-opkg"
+    RemoveFile "${FILE_USER_ENTRIES}-opkg"
+    RemoveFile "${FILE_BYPASS_ENTRIES}-opkg"
+    RemoveFile "${FILE_GR_EXCLUDED_SLD}-opkg"
+    RemoveFile "${FILE_GR_EXCLUDED_NETS}-opkg"
     rm -f $DNSMASQ_DATA_FILE $DNSMASQ_DATA_FILE_TMP
     rm -f $DNSMASQ_DATA_FILE_BYPASS ${DNSMASQ_DATA_FILE_BYPASS}.tmp
     rm -f $DNSMASQ_DATA_FILE_USER_INSTANCES ${DNSMASQ_DATA_FILE_USER_INSTANCES}.tmp

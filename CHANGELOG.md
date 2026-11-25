@@ -1,5 +1,47 @@
 # Changelog / История изменений
 
+## 2.3.0-r1 core, LuCI and parser modules
+
+Package versions: `ruantiblock`, `luci-app-ruantiblock`, `ruantiblock-mod-lua` and `ruantiblock-mod-py` — `2.3.0-r1`.
+
+### English
+
+#### Added
+
+- Added a **Restart** button on the main LuCI Service page (`admin/services/ruantiblock/service`) with Russian translation.
+
+#### Fixed
+
+- Enabled TLS certificate verification by default for `wget` and Lua HTTPS requests, added `+ca-bundle` to `ruantiblock` dependencies, and strictly validated downloaded native `ruantiblock.ip` and `ruantiblock.dnsmasq` files before applying them.
+- Fixed `cron.js` to read `/etc/crontabs/root` via `fs.read_direct` so read errors cannot be silently swallowed by `fs.lines` and overwrite unrelated cron jobs, and granted `cgi-io` `download` in `luci-app-ruantiblock` rpcd ACL alongside `exec`.
+- Fixed LuCI Service status rendering when the service is disabled (fresh DOM status badge elements instead of moving a shared node), added the missing `return` in the Update button handler, guarded empty dnsmasq directory selection on Shutdown, preserved disabled button states after `ui.createHandlerFn` settles, and reported action/status errors without unhandled rejections.
+- Moved mutating service `exec` commands and `luci.setInitAction` from `read` to `write` in `luci-app-ruantiblock` rpcd ACL.
+- Fixed Lua parser and `iptool.lua` CIDR normalization and `/0` overlap handling, fixed `idn.lua` UTF-8 label validation and Lua leading-dot FQDN rejection, fixed duplicate FQDN and post-optimization SLD/IP limit handling in both Lua and Python parsers without dropping capped domains/IPs, re-checked normalized CIDRs against `ip_excluded` in Python, rejected malformed ASCII domains in Python, checked `wget` exit codes and `os.rename` in Lua, and made `rublacklist` JSON field extraction resilient to escaped quotes and key order.
+- Fixed `ruab_parser_user_entries` handling of leading/trailing whitespace in `U_ENTRIES_REMOTE` and local loop variables in awk functions.
+- Fixed `ruantiblock` `Reload()` to create/refresh instance nftables sets, update or clean up `INSTANCES_CACHE`, and stop `ruab_route_check` when monitoring is no longer needed; checked `START_PID_FILE` before `CheckStatus` in `raw-status`.
+- Fixed `ruab_route_check` to require an IPv4 address (unless `vpn_gw_ip` is set) before triggering recovery reloads, and moved `40-ruantiblock` hotplug waiting off the synchronous `ifup` path after interface matching.
+- Fixed `opkg` package upgrade detection in `ruantiblock` `prerm` (`PKG_UPGRADE=1` / `$2=upgrade` when invoked via OpenWrt `default_prerm`) so service autostart state and `/etc/crontabs/root` entries are preserved across upgrades instead of running the uninstall branch.
+- Fixed `info_output` JSON generation for empty/multiline `update_status`, normalized uppercase domains and tightened DNS validation in `AddBypassEntries`, fixed LuCI log highlight entity corruption, cleared removed user list files only on Save & Apply in Settings, kept Statistics polling active across enabled/disabled transitions without stale tables, terminated child `uclient-fetch` on `check-updates` signal cleanup, fixed `-opkg` cleanup in `uninstall.sh`, removed unused module dependencies (`+idn`, `+python3-setuptools`), and synced `README` with release archive contents.
+
+### Русский
+
+#### Добавлено
+
+- Добавлена кнопка **Restart** («Перезапустить») на главную страницу службы LuCI (`admin/services/ruantiblock/service`) с русским переводом.
+
+#### Исправлено
+
+- Включена проверка TLS-сертификатов по умолчанию для `wget` и Lua HTTPS-запросов, добавлена зависимость `+ca-bundle` в пакет `ruantiblock` и строгая проверка загружаемых нативных файлов `ruantiblock.ip` и `ruantiblock.dnsmasq` перед применением.
+- В `cron.js` чтение `/etc/crontabs/root` переведено на `fs.read_direct`, чтобы ошибки чтения не скрывались внутри `fs.lines` и не приводили к потере сторонних задач cron; в ACL `luci-app-ruantiblock` добавлено право `download` для `cgi-io`.
+- Исправлено отображение статуса выключенной службы в LuCI (создание отдельных DOM-элементов вместо переноса общего узла), добавлен пропущенный `return` в обработчике кнопки «Обновить», защищён пустой выбор каталога dnsmasq при выключении, сохранено отключённое состояние кнопок после завершения `ui.createHandlerFn` и добавлено уведомление об ошибках действий службы без необработанных отклонений промисов.
+- В ACL `luci-app-ruantiblock` мутирующие команды службы и `luci.setInitAction` перенесены из секции `read` в `write`.
+- В Lua-парсере и `iptool.lua` исправлены нормализация нестрогих CIDR и обработка `/0`, в `idn.lua` и Lua-парсере исправлены проверка UTF-8 меток и запрет ведущей точки в доменах, в обоих парсерах (Lua и Python) устранено ложное схлопывание от дубликатов без потери доменов/IP при срабатывании лимитов, в Python добавлена перепроверка нормализованных CIDR по `ip_excluded` и запрещены некорректные ASCII-домены, в Lua добавлена проверка кода возврата `wget` и `os.rename`, улучшен разбор полей `rublacklist` с экранированными кавычками и произвольным порядком ключей.
+- В `ruab_parser_user_entries` исправлена обработка пробелов по краям `U_ENTRIES_REMOTE` и локализация переменных циклов `awk`.
+- В `Reload()` добавлены создание/обновление nft-сетов экземпляров, обновление или очистка `INSTANCES_CACHE` и остановка `ruab_route_check`, если мониторинг больше не требуется; в `raw-status` проверка `START_PID_FILE` выполняется до `CheckStatus`.
+- В `ruab_route_check` добавлена проверка наличия IPv4-адреса интерфейса (если не задан `vpn_gw_ip`) для предотвращения циклических перезагрузок, а в `40-ruantiblock` ожидание статуса перенесено в фон и выполняется только после совпадения VPN-интерфейса.
+- Исправлено определение обновления пакета `opkg` в `prerm` пакета `ruantiblock` (`PKG_UPGRADE=1` / `$2=upgrade` при вызове через OpenWrt `default_prerm`), чтобы при обновлении сохранялись состояние автозапуска службы и задания в `/etc/crontabs/root` вместо выполнения ветки удаления.
+- Исправлена генерация JSON в `info_output` при пустом/многострочном `update_status`, добавлены приведение к нижнему регистру и строгая проверка DNS в `AddBypassEntries`, исправлено повреждение HTML-сущностей при подсветке в журнале LuCI, очистка файлов удалённых списков перенесена в Save & Apply, на странице статистики опрос и полная перерисовка работают при любых переходах enabled/disabled, добавлено завершение `uclient-fetch` при отмене `check-updates`, исправлен суффикс `-opkg` в `uninstall.sh`, удалены неиспользуемые зависимости модулей (`+idn`, `+python3-setuptools`) и актуализированы `README`.
+
 ## 2.1.20-r6 core, LuCI and parser modules
 
 Package versions: `ruantiblock`, `luci-app-ruantiblock`, `ruantiblock-mod-lua` and `ruantiblock-mod-py` — `2.1.20-r6`.

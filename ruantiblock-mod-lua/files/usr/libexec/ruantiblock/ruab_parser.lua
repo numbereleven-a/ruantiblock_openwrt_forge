@@ -103,7 +103,8 @@ local Config = Class(nil, {
     ICONV_TYPE = "standalone",
     -- standalone iconv
     ICONV_CMD = "iconv",
-    WGET_CMD = "wget --no-check-certificate -q -O -",
+    WGET_CMD = "wget -q -O -",
+    CA_BUNDLE = "/etc/ssl/certs/ca-certificates.crt",
     encoding = "UTF-8",
     site_encoding = "",
     http_send_headers = {
@@ -359,10 +360,12 @@ function BlackListParser:new(t)
     instance.cidr_count = 0
     instance.cidr_table = {}
     instance.ip_subnet_table = {}
+    instance.ip_subnet_capped = {}
     instance.ip_records_count = 0
     instance.ip_count = 0
     instance.ip_table = {}
     instance.sld_table = {}
+    instance.sld_capped = {}
     instance.fqdn_count = 0
     instance.fqdn_records_count = 0
     instance.fqdn_table = {}
@@ -431,6 +434,43 @@ local function valid_ipv4(ip)
     return true
 end
 
+local function normalize_cidr(address, prefix)
+    if not address or not prefix or (#prefix > 1 and prefix:sub(1, 1) == "0") then
+        return nil
+    end
+    local prefix_num = tonumber(prefix)
+    if not prefix_num or prefix_num < 0 or prefix_num > 32 or not valid_ipv4(address) then
+        return nil
+    end
+    local a, b, c, d = address:match("^(%d+)%.(%d+)%.(%d+)%.(%d+)$")
+    local ip_int = tonumber(a) * 16777216 + tonumber(b) * 65536 + tonumber(c) * 256 + tonumber(d)
+    local step = 2 ^ (32 - prefix_num)
+    local net_int = math.floor(ip_int / step) * step
+    return string.format(
+        "%d.%d.%d.%d/%d",
+        math.floor(net_int / 16777216) % 256,
+        math.floor(net_int / 65536) % 256,
+        math.floor(net_int / 256) % 256,
+        net_int % 256,
+        prefix_num
+    )
+end
+
+local function valid_ascii_fqdn(value, pattern)
+    if not value or #value == 0 or #value > 253 or value:sub(1, 1) == "." or value:sub(-1) == "." or value:find("..", 1, true) then
+        return false
+    end
+    if not value:match("^" .. pattern .. "$") then
+        return false
+    end
+    for label in value:gmatch("([^.]+)") do
+        if #label > 63 or label:sub(1, 1) == "-" or label:sub(-1) == "-" then
+            return false
+        end
+    end
+    return true
+end
+
 function BlackListParser:ip_value_processing(value)
     if value and value ~= "" then
         for ip_entry in value:gmatch(self.ip_pattern .. "/?%d*") do
@@ -438,16 +478,25 @@ function BlackListParser:ip_value_processing(value)
             else
                 if not self.BLLIST_IP_FILTER or (self.BLLIST_IP_FILTER and not self:check_filter(ip_entry, self.BLLIST_IP_FILTER_PATTERNS, self.BLLIST_IP_FILTER_TYPE)) then
                     if ip_entry:match("^" .. self.ip_pattern .. "$") and valid_ipv4(ip_entry) and not self.ip_table[ip_entry] then
-                        local subnet = self:get_subnet(ip_entry)
-                        if subnet and (self.BLLIST_GR_EXCLUDED_NETS_PATTERNS[subnet] or ((not self.BLLIST_IP_LIMIT or self.BLLIST_IP_LIMIT == 0) or (not self.ip_subnet_table[subnet] or self.ip_subnet_table[subnet] < self.BLLIST_IP_LIMIT))) then
-                            self.ip_table[ip_entry] = subnet
-                            self.ip_subnet_table[subnet] = (self.ip_subnet_table[subnet] or 0) + 1
-                            self.ip_count = self.ip_count + 1
+                        if not (self.BLLIST_CIDR_EXCLUDED_ENABLE and self:check_cidr_overlap_ip(ip_entry)) then
+                            local subnet = self:get_subnet(ip_entry)
+                            if subnet then
+                                if self.BLLIST_GR_EXCLUDED_NETS_PATTERNS[subnet] or ((not self.BLLIST_IP_LIMIT or self.BLLIST_IP_LIMIT == 0) or (not self.ip_subnet_table[subnet] or self.ip_subnet_table[subnet] < self.BLLIST_IP_LIMIT)) then
+                                    self.ip_table[ip_entry] = subnet
+                                    self.ip_subnet_table[subnet] = (self.ip_subnet_table[subnet] or 0) + 1
+                                    self.ip_count = self.ip_count + 1
+                                else
+                                    self.ip_subnet_capped[subnet] = true
+                                end
+                            end
                         end
-                    elseif ip_entry:match("^" .. self.cidr_pattern .. "$") and not self.cidr_table[ip_entry] then
+                    elseif ip_entry:match("^" .. self.cidr_pattern .. "$") then
                         local address, prefix = ip_entry:match("^([^/]+)/(%d+)$")
-                        if valid_ipv4(address) and tonumber(prefix) <= 32 then
-                            self.cidr_table[ip_entry] = true
+                        local normalized = normalize_cidr(address, prefix)
+                        if normalized
+                            and not (self.BLLIST_IP_EXCLUDED_ENABLE and self.BLLIST_IP_EXCLUDED_ITEMS[normalized])
+                            and not self.cidr_table[normalized] then
+                            self.cidr_table[normalized] = true
                             self.cidr_count = self.cidr_count + 1
                         end
                     end
@@ -470,20 +519,27 @@ function BlackListParser:fqdn_value_processing(value)
         return true
     end
     if not self.BLLIST_FQDN_FILTER or (self.BLLIST_FQDN_FILTER and not self:check_filter(value, self.BLLIST_FQDN_FILTER_PATTERNS, self.BLLIST_FQDN_FILTER_TYPE)) then
-        if value:match("^" .. self.fqdn_pattern .. "$") then
-        elseif self.BLLIST_ENABLE_IDN and value:match('^[^\'",%%\\/&%?%s;`$|<>%(%){}%[%]]-[^\'",%%\\/&%?%.%s;`$|<>%(%){}%[%]]+%.[^\'",%%\\/&%?%.%s;`$|<>%(%){}%[%]]+%.?$') then
+        if valid_ascii_fqdn(value, self.fqdn_pattern) then
+        elseif self.BLLIST_ENABLE_IDN and value:find("[\128-\255]") and value:sub(1, 1) ~= "." and not value:find("..", 1, true) and value:match('^[^\'",%%\\/&%?%s;`$|<>%(%){}%[%]:]+%.[^\'",%%\\/&%?%.%s;`$|<>%(%){}%[%]:]+%.?$') then
             value = self:convert_to_punycode(value)
-            if not value then
+            if not value or not valid_ascii_fqdn(value, self.fqdn_pattern) then
                 return false
             end
         else
             return false
         end
         local sld = self:get_sld(value)
-        if sld and ((self.BLLIST_GR_EXCLUDED_SLD_PATTERNS[sld] or self:check_sld_masks(sld)) or ((not self.BLLIST_SD_LIMIT or self.BLLIST_SD_LIMIT == 0) or (not self.sld_table[sld] or self.sld_table[sld] < self.BLLIST_SD_LIMIT))) then
-            self.fqdn_table[value] = sld
-            self.sld_table[sld] = (self.sld_table[sld] or 0) + 1
-            self.fqdn_count = self.fqdn_count + 1
+        if not sld then
+            return false
+        end
+        if not self.fqdn_table[value] then
+            if (self.BLLIST_GR_EXCLUDED_SLD_PATTERNS[sld] or self:check_sld_masks(sld)) or ((not self.BLLIST_SD_LIMIT or self.BLLIST_SD_LIMIT == 0) or (not self.sld_table[sld] or self.sld_table[sld] < self.BLLIST_SD_LIMIT)) then
+                self.fqdn_table[value] = sld
+                self.sld_table[sld] = (self.sld_table[sld] or 0) + 1
+                self.fqdn_count = self.fqdn_count + 1
+            else
+                self.sld_capped[sld] = true
+            end
         end
     end
     return true
@@ -536,15 +592,27 @@ end
 
 function BlackListParser:get_http_data(url)
     local ret_val, ret_code, ret_headers
-    local http_module = url:match("^https") and https or http
+    local is_https = url:match("^https") and true or false
+    local http_module = is_https and https or http
     if http_module then
         if self.connect_timeout ~= nil then
             http_module.TIMEOUT = self.connect_timeout
         end
-        ret_val, ret_code, ret_headers = http_module.request{url = url, method="HEAD", headers = self.http_send_headers}
+        local tls_opts = {}
+        if is_https then
+            tls_opts.verify = "peer"
+            local ca_fh = self.CA_BUNDLE and io.open(self.CA_BUNDLE, "r")
+            if ca_fh then
+                ca_fh:close()
+                tls_opts.cafile = self.CA_BUNDLE
+            end
+        end
+        local head_req = {url = url, method = "HEAD", headers = self.http_send_headers, verify = tls_opts.verify, cafile = tls_opts.cafile}
+        ret_val, ret_code, ret_headers = http_module.request(head_req)
         if ret_val and ret_code == 200 then
             local http_sink = ltn12.sink.chain(self:prepare_data(), self:chunk_buffer(), self:parser_func())
-            ret_val, ret_code, ret_headers = http_module.request{url = url, sink = http_sink, headers = self.http_send_headers}
+            local get_req = {url = url, sink = http_sink, headers = self.http_send_headers, verify = tls_opts.verify, cafile = tls_opts.cafile}
+            ret_val, ret_code, ret_headers = http_module.request(get_req)
             self.http_codes[ret_code] = true
             if not ret_val or ret_code ~= 200 then
                 ret_val = nil
@@ -555,8 +623,22 @@ function BlackListParser:get_http_data(url)
             print(string.format("Connection error! (%s) URL: %s", ret_code, url))
         end
     else
+        local status_file = os.tmpname()
+        local cmd = self.WGET_CMD .. self.wget_user_agent .. ' ' .. shell_quote_single(url)
+            .. '; printf "%s" "$?" > ' .. shell_quote_single(status_file)
         local wget_sink = ltn12.sink.chain(self:prepare_data(), self:chunk_buffer(), self:parser_func())
-        ret_val = ltn12.pump.all(ltn12.source.file(io.popen(self.WGET_CMD .. self.wget_user_agent .. ' ' .. shell_quote_single(url), 'r')), wget_sink)
+        ret_val = ltn12.pump.all(ltn12.source.file(io.popen(cmd, 'r')), wget_sink)
+        local wget_rc = 1
+        local sf = io.open(status_file, "r")
+        if sf then
+            wget_rc = tonumber(sf:read("*a")) or 1
+            sf:close()
+        end
+        os.remove(status_file)
+        if wget_rc ~= 0 then
+            ret_val = nil
+            print(string.format("Connection error! (wget exit %s) URL: %s", tostring(wget_rc), url))
+        end
     end
     return (ret_val == 1) and true or false
 end
@@ -662,6 +744,7 @@ function Summarize:_group_ip_ranges(ip_list, raw_list)
                         break
                     end
                     start = ip_dec
+                    hosts = 1
                 end
                 stop = ip_dec
             elseif not last_call then
@@ -733,6 +816,7 @@ function Summarize:_group_nets(cidr_list, raw_list)
                         end
                         start = network_address
                         curr_supernet = supernet
+                        nets = 1
                     end
                     stop = network_address
                 end
@@ -924,17 +1008,45 @@ function OptimizeConfig:_union_sum(t1, t2)
 end
 
 function OptimizeConfig:optimize()
+    local sld_capped = {}
+    local ip_subnet_capped = {}
     for _, i in ipairs(self.parsers_list) do
         self:_union(self.cidr_table, i.cidr_table)
         self:_union(self.ip_table, i.ip_table)
-        self:_union_sum(self.ip_subnet_table, i.ip_subnet_table)
         self:_union(self.fqdn_table, i.fqdn_table)
-        self:_union_sum(self.sld_table, i.sld_table)
+        if i.sld_capped then
+            self:_union(sld_capped, i.sld_capped)
+        end
+        if i.ip_subnet_capped then
+            self:_union(ip_subnet_capped, i.ip_subnet_capped)
+        end
     end
     if self.BLLIST_CIDR_EXCLUDED_ENABLE then
         self:_exclude_nets()
     end
     self:_remove_subdomains()
+    self.ip_subnet_table = {}
+    for _, subnet in pairs(self.ip_table) do
+        self.ip_subnet_table[subnet] = (self.ip_subnet_table[subnet] or 0) + 1
+    end
+    if self.BLLIST_IP_LIMIT and self.BLLIST_IP_LIMIT > 0 then
+        for subnet in pairs(ip_subnet_capped) do
+            if self.ip_subnet_table[subnet] and self.ip_subnet_table[subnet] < self.BLLIST_IP_LIMIT then
+                self.ip_subnet_table[subnet] = self.BLLIST_IP_LIMIT
+            end
+        end
+    end
+    self.sld_table = {}
+    for _, sld in pairs(self.fqdn_table) do
+        self.sld_table[sld] = (self.sld_table[sld] or 0) + 1
+    end
+    if self.BLLIST_SD_LIMIT and self.BLLIST_SD_LIMIT > 0 then
+        for sld in pairs(sld_capped) do
+            if self.sld_table[sld] and self.sld_table[sld] < self.BLLIST_SD_LIMIT then
+                self.sld_table[sld] = self.BLLIST_SD_LIMIT
+            end
+        end
+    end
     self:_optimize_fqdn_table()
     self:_optimize_ip_table()
     if self.BLLIST_SUMMARIZE_IP then
@@ -1042,6 +1154,49 @@ end
 
     -- rublacklist.net
 
+local function extract_json_string_field(entry, key)
+    local _, pos = entry:find('"' .. key .. '":%s*"')
+    if not pos then
+        return ""
+    end
+    local buf = {}
+    local escaped = false
+    for idx = pos + 1, #entry do
+        local ch = entry:sub(idx, idx)
+        if escaped then
+            buf[#buf + 1] = ch
+            escaped = false
+        elseif ch == "\\" then
+            escaped = true
+        elseif ch == '"' then
+            return table.concat(buf)
+        else
+            buf[#buf + 1] = ch
+        end
+    end
+    return ""
+end
+
+local function iter_rbl_records(chunk)
+    local pos = 1
+    local sep = '{"appearDate": '
+    return function()
+        if not chunk or pos > #chunk then
+            return nil
+        end
+        local s, e = chunk:find(sep, pos, true)
+        if s then
+            local rec = chunk:sub(pos, s - 1)
+            pos = e + 1
+            return rec
+        else
+            local rec = chunk:sub(pos)
+            pos = #chunk + 1
+            return rec
+        end
+    end
+end
+
 local Rbl = Class(BlackListParser, {
     url = Config.RBL_ALL_URL,
     records_separator = '%{"appearDate": ',
@@ -1050,16 +1205,23 @@ local Rbl = Class(BlackListParser, {
 function Rbl:parser_func()
     return function(chunk)
         if chunk and chunk ~= "" then
-            for org_str, domains_raw, ip_str in chunk:gmatch('"name": "(.-)".-"domains": %[(.-)%].-"ips": %[([a-f0-9/.:", ]*)%].-') do
-                if org_str == "" or not self:org_value_processing(org_str) then
-                    local matched = false
-                    for fqdn_str in domains_raw:gmatch('"([^"]+)"') do
-                        if #fqdn_str > 0 and not fqdn_str:match("^" .. self.ip_pattern .. "$") and self:fqdn_value_processing(fqdn_str) then
-                            matched = true
+            for rec in iter_rbl_records(chunk) do
+                local domains_raw = rec:match('"domains":%s*%[(.-)%]')
+                local ip_str = rec:match('"ips":%s*%[([a-f0-9/.:", ]*)%]')
+                if domains_raw or ip_str then
+                    local org_str = extract_json_string_field(rec, "name")
+                    if org_str == "" or not self:org_value_processing(org_str) then
+                        local matched = false
+                        if domains_raw then
+                            for fqdn_str in domains_raw:gmatch('"([^"]+)"') do
+                                if #fqdn_str > 0 and not fqdn_str:match("^" .. self.ip_pattern .. "$") and self:fqdn_value_processing(fqdn_str) then
+                                    matched = true
+                                end
+                            end
                         end
-                    end
-                    if not matched then
-                        self:ip_value_processing(ip_str)
+                        if not matched and ip_str then
+                            self:ip_value_processing(ip_str)
+                        end
                     end
                 end
             end
@@ -1074,10 +1236,14 @@ local RblFQDN = Class(Rbl, {
 function RblFQDN:parser_func()
     return function(chunk)
         if chunk and chunk ~= "" then
-            for org_str, domains_raw in chunk:gmatch('"name": "(.-)".-"domains": %[(.-)%].-') do
-                if org_str == "" or not self:org_value_processing(org_str) then
-                    for fqdn_str in domains_raw:gmatch('"([^"]+)"') do
-                        fqdn_parser_func(self, nil, fqdn_str)
+            for rec in iter_rbl_records(chunk) do
+                local domains_raw = rec:match('"domains":%s*%[(.-)%]')
+                if domains_raw then
+                    local org_str = extract_json_string_field(rec, "name")
+                    if org_str == "" or not self:org_value_processing(org_str) then
+                        for fqdn_str in domains_raw:gmatch('"([^"]+)"') do
+                            fqdn_parser_func(self, nil, fqdn_str)
+                        end
                     end
                 end
             end
@@ -1092,9 +1258,13 @@ local RblIp = Class(Rbl, {
 function RblIp:parser_func()
     return function(chunk)
         if chunk and chunk ~= "" then
-            for org_str, ip_str in chunk:gmatch('"name": "(.-)".-"domains": %["?.-"?%].-"ips": %[([a-f0-9/.:", ]*)%].-') do
-                if org_str == "" or not self:org_value_processing(org_str) then
-                    self:ip_value_processing(ip_str)
+            for rec in iter_rbl_records(chunk) do
+                local ip_str = rec:match('"ips":%s*%[([a-f0-9/.:", ]*)%]')
+                if ip_str then
+                    local org_str = extract_json_string_field(rec, "name")
+                    if org_str == "" or not self:org_value_processing(org_str) then
+                        self:ip_value_processing(ip_str)
+                    end
                 end
             end
         end
@@ -1396,9 +1566,15 @@ function Ra:run()
         end
     end
     if return_code == 0 then
-        os.rename(ip_tmp, self.IP_DATA_FILE)
-        os.rename(dns_tmp, self.DNSMASQ_DATA_FILE)
-        os.rename(stat_tmp, self.UPDATE_STATUS_FILE)
+        local ok_ip = os.rename(ip_tmp, self.IP_DATA_FILE)
+        local ok_dns = ok_ip and os.rename(dns_tmp, self.DNSMASQ_DATA_FILE)
+        local ok_stat = ok_dns and os.rename(stat_tmp, self.UPDATE_STATUS_FILE)
+        if not ok_stat then
+            return_code = 2
+            os.remove(ip_tmp)
+            os.remove(dns_tmp)
+            os.remove(stat_tmp)
+        end
     else
         os.remove(ip_tmp)
         os.remove(dns_tmp)

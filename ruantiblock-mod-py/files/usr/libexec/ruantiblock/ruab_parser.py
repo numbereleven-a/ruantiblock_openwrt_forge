@@ -110,9 +110,9 @@ class Config:
         try:
             for k, v in cfg_dict.items():
                 if k in config_sets:
-                    value = {normalize_string(i) for i in v.split(" ")}
+                    value = {normalize_string(i) for i in v.split()}
                 elif k in config_arrays:
-                    value = [normalize_string(i) for i in v.split(" ")]
+                    value = [normalize_string(i) for i in v.split()]
                 else:
                     try:
                         value = int(v)
@@ -132,7 +132,7 @@ class Config:
     @classmethod
     def _load_filter(cls, file_path, filter_patterns, is_array=False, func=None):
         try:
-            with open(file_path, "rt") as file_handler:
+            with open(file_path, "rt", encoding="utf-8") as file_handler:
                 for line in file_handler:
                     if line and not re.match(r"(^#|^$)", line):
                         value = line.strip()
@@ -257,14 +257,16 @@ class BlackListParser(Config):
         self.ip_pattern = re.compile(r"(([0-9]{1,3}[.]){3})[0-9]{1,3}")
         self.cidr_pattern = re.compile(r"([0-9]{1,3}[.]){3}[0-9]{1,3}/[0-9]{1,2}")
         self.fqdn_pattern = re.compile(
-            r"([а-яёa-z0-9_.*-]*?)([а-яёa-z0-9_-]+[.][а-яёa-z0-9-]+)", re.U)
+            r"([а-яёa-z0-9_.-]*?)([а-яёa-z0-9_-]+[.][а-яёa-z0-9-]+)", re.U)
         self.www_pattern = re.compile(r"^www[0-9]?[.]")
         self.cyr_pattern = re.compile(r"[а-яё]", re.U)
         self.cidr_set = set()
         self.ip_dict = {}
         self.ip_subnet_dict = {}
+        self.ip_subnet_capped = set()
         self.fqdn_dict = {}
         self.sld_dict = {}
+        self.sld_capped = set()
         self.cidr_count = 0
         self.ip_count = 0
         self.output_fqdn_count = 0
@@ -378,6 +380,8 @@ class BlackListParser(Config):
                 return
             if value in self.ip_dict:
                 return
+            if getattr(self, "BLLIST_CIDR_EXCLUDED_ENABLE", 0) and self.check_cidr_overlap(value):
+                return
             subnet = self._get_subnet(value)
             if subnet in self.BLLIST_GR_EXCLUDED_NETS_PATTERNS or (
                 not self.BLLIST_IP_LIMIT or (
@@ -386,12 +390,17 @@ class BlackListParser(Config):
             ):
                 self.ip_dict[value] = subnet
                 self.ip_subnet_dict[subnet] = (self.ip_subnet_dict.get(subnet) or 0) + 1
+            elif subnet:
+                self.ip_subnet_capped.add(subnet)
         elif self.cidr_pattern.fullmatch(value):
             try:
                 net = IPv4Network(value, strict=False)
             except (AddressValueError, NetmaskValueError, ValueError):
                 return
-            self.cidr_set.add(net.with_prefixlen)
+            normalized = net.with_prefixlen
+            if self.BLLIST_IP_EXCLUDED_ENABLE and normalized in self.BLLIST_IP_EXCLUDED_ITEMS:
+                return
+            self.cidr_set.add(normalized)
 
     def _convert_to_punycode(self, string):
         if self.cyr_pattern.search(string):
@@ -408,6 +417,17 @@ class BlackListParser(Config):
         regexp_obj = self.fqdn_pattern.fullmatch(fqdn)
         return regexp_obj.group(2) if regexp_obj else None
 
+    def _valid_fqdn_labels(self, fqdn):
+        if not fqdn or len(fqdn) > 253 or ".." in fqdn:
+            return False
+        labels = fqdn.split(".")
+        if len(labels) < 2:
+            return False
+        for label in labels:
+            if not label or len(label) > 63 or label[0] == "-" or label[-1] == "-":
+                return False
+        return True
+
     def fqdn_value_processing(self, value):
         if self.ip_pattern.fullmatch(value):
             raise FieldValueError()
@@ -420,9 +440,15 @@ class BlackListParser(Config):
             self.BLLIST_FQDN_FILTER and not self._check_filter(
                 value, self.BLLIST_FQDN_FILTER_PATTERNS, self.BLLIST_FQDN_FILTER_TYPE)
         ):
-            if self.fqdn_pattern.fullmatch(value):
+            if self.fqdn_pattern.fullmatch(value) and self._valid_fqdn_labels(value):
                 value = self._convert_to_punycode(value)
+                if not self._valid_fqdn_labels(value):
+                    raise FieldValueError()
                 sld = self._get_sld(value)
+                if not sld:
+                    raise FieldValueError()
+                if value in self.fqdn_dict:
+                    return
                 if (sld in self.BLLIST_GR_EXCLUDED_SLD_PATTERNS or self.check_sld_masks(sld)) or (
                     not self.BLLIST_SD_LIMIT or (
                         sld not in self.sld_dict or self.sld_dict[sld] < self.BLLIST_SD_LIMIT
@@ -430,6 +456,8 @@ class BlackListParser(Config):
                 ):
                     self.sld_dict[sld] = (self.sld_dict.get(sld) or 0) + 1
                     self.fqdn_dict[value] = sld
+                else:
+                    self.sld_capped.add(sld)
             else:
                 raise FieldValueError()
 
@@ -515,10 +543,11 @@ class Summarize:
             for i in summarize_address_range(s, e):
                 if i.prefixlen == 32:
                     if modify_raw_list:
+                        addr = str(i.network_address)
                         if type(ip_list) == set:
-                            ip_list.add(i.network_address)
+                            ip_list.add(addr)
                         else:
-                            ip_list.append(i.network_address)
+                            ip_list.append(addr)
                 else:
                     yield i
 
@@ -643,16 +672,30 @@ class OptimizeConfig(Config):
         self.cidr_count = len(self.cidr_set)
 
     def optimize(self):
+        sld_capped = set()
+        ip_subnet_capped = set()
         for i in self.parsers_list:
             self.cidr_set |= i.cidr_set
             self.ip_dict.update(i.ip_dict)
-            for subnet, count in i.ip_subnet_dict.items():
-                self.ip_subnet_dict[subnet] = self.ip_subnet_dict.get(subnet, 0) + count
             self.fqdn_dict.update(i.fqdn_dict)
-            for sld, count in i.sld_dict.items():
-                self.sld_dict[sld] = self.sld_dict.get(sld, 0) + count
+            sld_capped |= getattr(i, "sld_capped", set())
+            ip_subnet_capped |= getattr(i, "ip_subnet_capped", set())
         self._exclude_nets()
         self._remove_subdomains()
+        self.ip_subnet_dict = {}
+        for subnet in self.ip_dict.values():
+            self.ip_subnet_dict[subnet] = self.ip_subnet_dict.get(subnet, 0) + 1
+        if self.BLLIST_IP_LIMIT:
+            for subnet in ip_subnet_capped:
+                if subnet in self.ip_subnet_dict and self.ip_subnet_dict[subnet] < self.BLLIST_IP_LIMIT:
+                    self.ip_subnet_dict[subnet] = self.BLLIST_IP_LIMIT
+        self.sld_dict = {}
+        for sld in self.fqdn_dict.values():
+            self.sld_dict[sld] = self.sld_dict.get(sld, 0) + 1
+        if self.BLLIST_SD_LIMIT:
+            for sld in sld_capped:
+                if sld in self.sld_dict and self.sld_dict[sld] < self.BLLIST_SD_LIMIT:
+                    self.sld_dict[sld] = self.BLLIST_SD_LIMIT
         self._optimize_fqdn_dict()
         self._optimize_ip_dict()
         self._group_ip_ranges()
@@ -665,7 +708,7 @@ class WriteConfigFiles(Config):
 
     def write_ipset_config(self, ip_dict, cidr_set):
         tmp_file = f"{self.IP_DATA_FILE}.tmp"
-        with open(tmp_file, "wt", buffering=self.write_buffer) as file_handler:
+        with open(tmp_file, "wt", buffering=self.write_buffer, encoding="utf-8") as file_handler:
             for i in (self.NFTSET_CIDR, self.NFTSET_IP):
                 file_handler.write("flush set {} {}\n".format(self.NFT_TABLE, i))
             file_handler.write(
@@ -689,7 +732,7 @@ class WriteConfigFiles(Config):
 
     def write_dnsmasq_config(self, fqdn_dict):
         tmp_file = f"{self.DNSMASQ_DATA_FILE}.tmp"
-        with open(tmp_file, "wt", buffering=self.write_buffer) as file_handler:
+        with open(tmp_file, "wt", buffering=self.write_buffer, encoding="utf-8") as file_handler:
             for fqdn in fqdn_dict:
                 file_handler.write(
                     f"server=/{fqdn}/{self.BLLIST_ALT_DNS_ADDR}\nnftset=/{fqdn}/{self.NFT_TABLE_DNSMASQ}#{self.NFTSET_DNSMASQ}\n"
@@ -699,7 +742,7 @@ class WriteConfigFiles(Config):
 
     def write_update_status_file(self, ip_count, cidr_count, fqdn_count):
         tmp_file = f"{self.UPDATE_STATUS_FILE}.tmp"
-        with open(tmp_file, "wt") as file_handler:
+        with open(tmp_file, "wt", encoding="utf-8") as file_handler:
             file_handler.write(
                 f"{cidr_count} {ip_count} {fqdn_count}")
         os.replace(tmp_file, self.UPDATE_STATUS_FILE)
@@ -711,20 +754,23 @@ class RblHybrid(BlackListParser):
         self.url = self.RBL_ALL_URL
         self.records_separator = '{"appearDate": '
         self.ips_separator = ", "
-        self.entry_regexp = re.compile(r'"domains": \[(.*?)\].*?"ips": \[([a-f0-9/.:", ]*)\]')
+        self.domains_regexp = re.compile(r'"domains":\s*\[(.*?)\]')
+        self.ips_regexp = re.compile(r'"ips":\s*\[([a-f0-9/.:", ]*)\]')
         self.domain_item_regexp = re.compile(r'"([^"]+)"')
-        self.org_value_regexp = re.compile(r'"name": "(.*?)"')
+        self.org_value_regexp = re.compile(r'"name":\s*"((?:[^"\\]|\\.)*)"')
 
     def parser_func(self):
         for url in self.url:
             for entry in self._split_entries(url):
                 org = self.org_value_regexp.search(entry)
-                if not org or not self.org_value_processing(org.group(1)):
-                    res = self.entry_regexp.search(entry)
-                    if not res:
+                org_val = org.group(1).replace('\\"', '"').replace('\\\\', '\\') if org else ""
+                if not org_val or not self.org_value_processing(org_val):
+                    domains_match = self.domains_regexp.search(entry)
+                    ips_match = self.ips_regexp.search(entry)
+                    if not domains_match and not ips_match:
                         continue
-                    ip_string = res.group(2).replace('"', "")
-                    domains = self.domain_item_regexp.findall(res.group(1))
+                    ip_string = ips_match.group(1).replace('"', "") if ips_match else ""
+                    domains = self.domain_item_regexp.findall(domains_match.group(1)) if domains_match else []
                     matched = False
                     for fqdn_string in domains:
                         try:
@@ -732,7 +778,7 @@ class RblHybrid(BlackListParser):
                             matched = True
                         except FieldValueError:
                             pass
-                    if not matched:
+                    if not matched and ip_string:
                         for i in ip_string.split(self.ips_separator):
                             self.ip_value_processing(i)
 
@@ -764,11 +810,12 @@ class RblFQDN(RblHybrid):
         for url in self.url:
             for entry in self._split_entries(url):
                 org = self.org_value_regexp.search(entry)
-                if not org or not self.org_value_processing(org.group(1)):
-                    res = self.entry_regexp.search(entry)
-                    if not res:
+                org_val = org.group(1).replace('\\"', '"').replace('\\\\', '\\') if org else ""
+                if not org_val or not self.org_value_processing(org_val):
+                    domains_match = self.domains_regexp.search(entry)
+                    if not domains_match:
                         continue
-                    for fqdn_string in self.domain_item_regexp.findall(res.group(1)):
+                    for fqdn_string in self.domain_item_regexp.findall(domains_match.group(1)):
                         try:
                             self.fqdn_value_processing(fqdn_string)
                         except FieldValueError:
@@ -780,14 +827,15 @@ class RblIp(RblHybrid):
         for url in self.url:
             for entry in self._split_entries(url):
                 org = self.org_value_regexp.search(entry)
-                if not org or not self.org_value_processing(org.group(1)):
-                    res = self.entry_regexp.search(entry)
-                    if not res:
+                org_val = org.group(1).replace('\\"', '"').replace('\\\\', '\\') if org else ""
+                if not org_val or not self.org_value_processing(org_val):
+                    ips_match = self.ips_regexp.search(entry)
+                    if not ips_match:
                         continue
-                    ip_string = res.group(2).replace('"', "")
+                    ip_string = ips_match.group(1).replace('"', "")
                     if ip_string:
                         for i in ip_string.split(self.ips_separator):
-                                self.ip_value_processing(i)
+                            self.ip_value_processing(i)
 
 
 class ZiHybrid(BlackListParser):
@@ -973,6 +1021,8 @@ class Ra(BlackListParser):
         self.url_stat = self.DL_STAT_URL
 
     def download_config(self, url, cfg_file):
+        if not url:
+            return False
         self.url = url
         file_handler = None
         wrote_file = False

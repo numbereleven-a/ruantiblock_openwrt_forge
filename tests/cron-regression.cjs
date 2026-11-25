@@ -13,8 +13,9 @@ const factory = new Function('fs','ui','view','tools','E','_', source);
 const results = [];
 async function scenario(name, error, lines, writeError) {
     let writes=[], restarts=[];
+    const raw = (lines || []).length ? lines.join('\n') + '\n' : '';
     const page = factory({
-        lines: () => error ? Promise.reject(Object.assign(new Error(name), {name:error})) : Promise.resolve(lines),
+        read_direct: () => error ? Promise.reject(Object.assign(new Error(name), {name:error})) : Promise.resolve(raw),
         write: (path, data) => { writes.push(data); return writeError ? Promise.reject(new Error('write failed')) : Promise.resolve(); }
     }, {addNotification(){}, createHandlerFn(){ return () => {}; }}, {extend:x=>x}, {
         execPath:'/usr/bin/ruantiblock', crontabFile:'/etc/crontabs/root',

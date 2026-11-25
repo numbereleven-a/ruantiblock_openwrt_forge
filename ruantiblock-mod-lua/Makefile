@@ -5,8 +5,8 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=ruantiblock-mod-lua
-PKG_VERSION:=2.1.20
-PKG_RELEASE:=6
+PKG_VERSION:=2.3.0
+PKG_RELEASE:=1
 PKG_MAINTAINER:=numbereleven-a <https://github.com/numbereleven-a/ruantiblock_openwrt_forge>
 
 include $(INCLUDE_DIR)/package.mk
@@ -17,8 +17,8 @@ define Package/$(PKG_NAME)
   TITLE:=Lua module for ruantiblock
   URL:=https://github.com/numbereleven-a/ruantiblock_openwrt_forge
   PKGARCH:=all
-  DEPENDS:=+ruantiblock +lua +luasocket +luasec +luabitop +iconv +idn
-  #DEPENDS:=+ruantiblock +lua +luasocket +luasec +luabitop +iconv +idn +lua-lzlib
+  DEPENDS:=+ruantiblock +lua +luasocket +luasec +luabitop +iconv
+  #DEPENDS:=+ruantiblock +lua +luasocket +luasec +luabitop +iconv +lua-lzlib
 endef
 
 define Package/$(PKG_NAME)/description

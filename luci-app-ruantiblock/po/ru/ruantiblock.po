@@ -702,3 +702,9 @@ msgstr "IPv4-адреса устройств"
 
 msgid "Only these devices use this list. An empty list matches no devices. Other routing rules still apply."
 msgstr "Этот список действует только для указанных устройств. Пустой перечень не выбирает ни одного устройства. Остальные правила маршрутизации продолжают действовать."
+
+msgid "Restart"
+msgstr "Перезапустить"
+
+msgid "Restart service"
+msgstr "Перезапустить службу"

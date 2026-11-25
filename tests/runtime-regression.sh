@@ -97,8 +97,53 @@ check nft-wrapper-argument-boundaries NftCmdWrapper capture 'two words'
 NftCmdWrapper false
 check nft-wrapper-failure-status test "$?" -eq 1
 
+(
+    printf '#!/bin/sh\nprintf "203.0.113.8\\n"\n' > "$WGET_CMD"
+    chmod +x "$WGET_CMD"
+    TEST_URL='  https://example.invalid/list  '
+    AddUserEntries > "$WORK/parser-spaces.log" 2>&1
+)
+check remote-url-surrounding-spaces-accepted test "$?" -eq 0
+
 ( DownloadNativeBlacklist >/dev/null 2>&1; printf 'cleanup\n' > "$WORK/native-cleanup" )
 check native-error-returned-to-caller test -s "$WORK/native-cleanup"
+
+( IP_DATA_FILE="$WORK/native.ip" IP_DATA_FILE_TMP="$WORK/native.ip.tmp"
+  DNSMASQ_DATA_FILE="$WORK/native.dns" DNSMASQ_DATA_FILE_TMP="$WORK/native.dns.tmp"
+  UPDATE_STATUS_FILE="$WORK/native.stat" UPDATE_STATUS_FILE_TMP="$WORK/native.stat.tmp"
+  DL_IPSET_URL="https://example.invalid/ip" DL_DMASK_URL="https://example.invalid/dns" DL_STAT_URL="https://example.invalid/stat"
+  NFT_TABLE="ip r" NFTSET_CIDR="c" NFTSET_IP="i" NFT_TABLE_DNSMASQ="4#ip#r" NFTSET_DNSMASQ="d"
+  Download() {
+    case "$2" in
+      */ip) printf '%s\n' "$NATIVE_PAYLOAD" > "$1" ;;
+      */dns) printf '%s\n' "$NATIVE_DNS_PAYLOAD" > "$1" ;;
+      */stat) printf '1 0 1' > "$1" ;;
+    esac
+  }
+  NATIVE_DNS_PAYLOAD='nftset=/example.org/4#ip#r#d'
+  for bad_ip in \
+    'flush ruleset' \
+    "$(printf 'flush set ip r bi\ntable ip r {\nset c {type ipv4_addr;}\n}')" \
+    "$(printf 'table ip r {\nset bi {type ipv4_addr;elements={0.0.0.0/0,};}\n}')" \
+    "$(printf 'table ip r {\nset c {type ipv4_addr;}; add element ip r bi { 198.51.100.1 }; set i {type ipv4_addr;}\n}')" \
+    "$(printf 'table ip r {\nset c {type ipv4_addr;}\n')"
+  do
+    NATIVE_PAYLOAD="$bad_ip"
+    DownloadNativeBlacklist >/dev/null 2>&1 && exit 1
+  done
+  NATIVE_PAYLOAD=$(printf 'flush set ip r c\nflush set ip r i\ntable ip r {\nset c {type ipv4_addr;size 65535;policy memory;flags interval;auto-merge;elements={192.0.2.0/24,};}\nset i {type ipv4_addr;size 1000000;policy memory;flags dynamic;}\n}')
+  for bad_dns in \
+    'dhcp-script=/bin/sh' \
+    'address=/bank.example/198.51.100.2' \
+    'nftset=/example.org/4#ip#r#bd'
+  do
+    NATIVE_DNS_PAYLOAD="$bad_dns"
+    DownloadNativeBlacklist >/dev/null 2>&1 && exit 1
+  done
+  NATIVE_DNS_PAYLOAD=$(printf '# comment\nserver=/example.org/8.8.8.8#53\nnftset=/example.org/4#ip#r#d\n')
+  DownloadNativeBlacklist >/dev/null 2>&1
+)
+check native-ip-and-dnsmasq-validation test "$?" -eq 0
 
 printf '#!/bin/sh\nif [ "$1" = show ]; then\nprintf "review-fixture.config.allowed_hosts_list=\047alpha  beta\\tgamma\047\\nreview-fixture.list1.u_entries_remote=\047alpha  beta\\tgamma\047\\n"\nelse\nexit 1\nfi\n' > "$WORK/bin/uci"
 chmod +x "$WORK/bin/uci"

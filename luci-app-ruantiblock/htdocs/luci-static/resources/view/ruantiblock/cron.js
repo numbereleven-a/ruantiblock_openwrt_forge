@@ -117,8 +117,15 @@ return view.extend({
 
 	load() {
 		this.crontabReadFailed = false;
-		return fs.lines(tools.crontabFile).catch(e => {
-			if(e.name === 'NotFoundError')
+		return fs.read_direct(tools.crontabFile).then(content => {
+			let lines = [];
+			let trimmed = String(content || '').trim();
+			if(trimmed !== '') {
+				trimmed.split(/\r?\n/).forEach(line => lines.push(line.trim()));
+			};
+			return lines;
+		}).catch(e => {
+			if(e && e.name === 'NotFoundError')
 				return [];
 			this.crontabReadFailed = true;
 			ui.addNotification(null, E('p', _('Unable to read the contents')

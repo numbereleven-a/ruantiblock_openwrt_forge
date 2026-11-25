@@ -63,15 +63,31 @@ bypass_failure() (
  export BYPASS_ENTRIES_FILE="$DATA_DIR/entries" BYPASS_MODE=1
  NFTSET_CLEAR_SETS=0; ENABLE_TMP_DOWNLOADS=1
  FlushNftSets() { echo flushed > "$WORK/flush"; }
- for entry in '300.1.1.1' '192.0.2.1/99' 'test.example 192.0.2.53#99999'; do
+ for entry in '300.1.1.1' '192.0.2.1/99' 'test.example 192.0.2.53#99999' 'test.example 192.0.2.53#0'; do
    printf '%s\n' "$entry" > "$BYPASS_ENTRIES_FILE"
    AddBypassEntries; rc=$?
    test "$rc" != 0 && test ! -e "$WORK/flush" || exit 1
  done
- printf '192.0.2.1/24\ntest.example 192.0.2.53#65535\n' > "$BYPASS_ENTRIES_FILE"
- AddBypassEntries && grep -q '192.0.2.1/24' "$IP_DATA_FILE_BYPASS"
+ export BYPASS_ENTRIES_DNS='192.0.2.53#53#99'
+ printf 'test.example\n' > "$BYPASS_ENTRIES_FILE"
+ AddBypassEntries; rc=$?
+ test "$rc" != 0 || exit 1
+ export BYPASS_ENTRIES_DNS=''
+ printf '192.0.2.1/24\nUPPER.EXAMPLE 192.0.2.53#65535\n' > "$BYPASS_ENTRIES_FILE"
+ AddBypassEntries && grep -q '192.0.2.1/24' "$IP_DATA_FILE_BYPASS" && grep -q 'nftset=/upper.example/' "$DNSMASQ_DATA_FILE_BYPASS"
 )
 check invalid-bypass-rejected-before-flush bypass_failure
+empty_status_info() (
+ . "$ROOT/usr/share/ruantiblock/info_output"
+ UPDATE_STATUS_FILE="$WORK/empty-status"
+ USER_ENTRIES_STATUS_FILE="$WORK/absent-user-status"
+ : > "$UPDATE_STATUS_FILE"
+ NftListBllistChainJson() { printf '{"nftables":[]}'; }
+ NFT_CMD=true NFT_TABLE='ip r' NFTSET_DNSMASQ=d USER_INSTANCES_ALL='' BYPASS_MODE=0
+ out=$(Info)
+ printf '%s' "$out" | grep -q '"last_blacklist_update":{"status":false}'
+)
+check empty-update-status-valid-json empty_status_info
 publish_failure() (
  : > "$DNSMASQ_DATA_FILE"
  printf 'server=/new.example/192.0.2.54\n' > "$DNSMASQ_DATA_FILE_BYPASS"

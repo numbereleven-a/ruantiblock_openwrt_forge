@@ -5,8 +5,8 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=ruantiblock-mod-py
-PKG_VERSION:=2.1.20
-PKG_RELEASE:=6
+PKG_VERSION:=2.3.0
+PKG_RELEASE:=1
 PKG_MAINTAINER:=numbereleven-a <https://github.com/numbereleven-a/ruantiblock_openwrt_forge>
 
 include $(INCLUDE_DIR)/package.mk
@@ -17,7 +17,7 @@ define Package/$(PKG_NAME)
   TITLE:=Python module for ruantiblock
   URL:=https://github.com/numbereleven-a/ruantiblock_openwrt_forge
   PKGARCH:=all
-  DEPENDS:=+ruantiblock +python3 +python3-setuptools +python3-openssl
+  DEPENDS:=+ruantiblock +python3 +python3-openssl
 endef
 
 define Package/$(PKG_NAME)/description

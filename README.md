@@ -34,7 +34,7 @@ Choose the package format supported by the target OpenWrt release from the [late
 
 * OpenWrt 25.12 and newer — APK packages for installation with `apk`.
 
-The main release archives contain the required `ruantiblock` and `luci-app-ruantiblock` package pair for the corresponding format. The optional Lua and Python modules are published as separate release assets.
+Each release archive contains the required `ruantiblock`, `luci-app-ruantiblock`, and `luci-i18n-ruantiblock-ru` packages, the optional Lua and Python modules, and `SHA256SUMS` for the corresponding package format.
 
 Required packages:
 
@@ -52,4 +52,4 @@ Prepare the required OpenWrt dependencies as described in the [original project 
 
 After manually installing or upgrading the packages, check whether Ruantiblock is enabled at boot; autostart may be disabled. Enable it in LuCI under System → Startup or run `/etc/init.d/ruantiblock enable`. Check its status with `/etc/init.d/ruantiblock enabled`. The autoinstaller enables autostart automatically.
 
-`SHA256SUMS` is published as a separate release asset for package verification. Installation and upgrade commands are included in the release description.
+Use `SHA256SUMS` inside the archive to verify the packages. Installation and upgrade commands are included in the release description.

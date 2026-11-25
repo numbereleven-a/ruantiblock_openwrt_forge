@@ -643,3 +643,9 @@ msgstr ""
 
 msgid "Unable to check for updates"
 msgstr ""
+
+msgid "Restart"
+msgstr ""
+
+msgid "Restart service"
+msgstr ""
